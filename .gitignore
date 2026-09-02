@@ -1,0 +1,9 @@
+# Local workspace metadata and generated runtime artifacts.
+.codex/
+.vscode/
+__pycache__/
+*.py[cod]
+
+# The upstream checkout keeps its own Git metadata. It is intentionally
+# preserved locally and represented by the parent repository as a gitlink.
+ok-wuthering-waves/.git/
