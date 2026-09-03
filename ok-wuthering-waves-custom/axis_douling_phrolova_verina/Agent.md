@@ -19,7 +19,7 @@ For the customized checkout, the direct source-file method is the simplest:
 3. Restart OKWW so the imported character classes and team-code cache are refreshed.
 4. Start Auto Combat with exactly Buling, Phrolova, and Verina in the detected team.
 
-The Qt Character Code tab is the alternative for keeping the change team-scoped. Create or import a custom team containing exactly these three characters, then replace and save the corresponding `Douling.py`, `Phrolova.py`, and `Verina.py` entries. The current `弗卜维.zip` in this folder is preserved as a historical artifact; it does not contain the current `team.json` manifest required by the team importer, so use the loose files above or export a new archive from the Character Code tab.
+The Qt Character Code tab is the alternative for keeping the change team-scoped. Create or import a custom team containing exactly these three characters, then replace and save the corresponding `Douling.py`, `Phrolova.py`, and `Verina.py` entries. For direct archive import, use `弗卜维_施法时序_1.0.3.zip` in this folder; it contains the current three files and the required `team.json`. The older `弗卜维.zip`, `弗卜维_施法时序_1.0.1.zip`, and `弗卜维_施法时序_1.0.2.zip` are preserved as historical artifacts and must not be used for current testing.
 
 Do not combine the three classes into one Python file, rename the classes, or replace `BaseChar.py`. The axis gate depends on the canonical names `char_douling`, `char_phrolova`, and `char_verina`.
 
@@ -91,24 +91,39 @@ The three classes share a task-level dictionary named `_dpv_axis_state`:
 - `team`: canonical team-name set used to validate the route.
 - `phase`: current phase number.
 - `target`: canonical name of the next character to switch to.
+- `step`: action index within the current phase.
+- `phase_started`: whether the intro wait and combo initialization for the current phase have run.
 
-Each phase sets the next phase before calling `switch_next_char`. The expected target returns `SwitchPriority.MUST`; all other team members return `SwitchPriority.NO`. Douling and Verina also disable the base healer full-concerto switch lockout while this exact team is active, because that lockout would otherwise prevent the requested short return to a healer.
+Each phase sets the next phase and resets `step` before calling `switch_next_char`. An action that returns `False` leaves `step` unchanged and is retried on the next combat-loop tick; completed actions are not replayed. The expected target returns `SwitchPriority.MUST`; all other team members return `SwitchPriority.NO`. Douling and Verina also disable the base healer full-concerto switch lockout while this exact team is active, because that lockout would otherwise prevent the requested short return to a healer.
 
 The state is removed by `on_combat_end`. Character-local state is reset through `reset_state`, so a new combat starts at phase 0 and routes to Douling.
 
 ## Timing Policy
 
-The axis uses explicit action buffers instead of chaining inputs at the minimum polling interval:
+The axis waits for an action's minimum cast/derive time before issuing the next distinct input. Each wait is anchored immediately before its helper; blocking framework helpers consume that window, so their elapsed time is not double-counted.
+Each completed or failed action emits a debug record with its phase, step, callable name, elapsed wall time, and result, so real-game tuning can distinguish a slow helper from an unavailable skill.
 
-- Phrolova A-to-A interval: `0.24s`.
-- Douling and Verina A-to-A interval: `0.18s`.
-- Phrolova dodge: `0.20s` pre-buffer and `0.12s` post-buffer around one right-click.
-- Douling and Verina dodge: `0.14s` pre-buffer and `0.12s` post-buffer around one right-click.
-- Skill post-buffer: `0.22s` after a successful E or Q.
-- Echo post-buffer: `0.16s` after a successful R.
-- Jump post-buffer: `0.14s` after `task.jump`.
+| Character | Action | Current timing source |
+| --- | --- | --- |
+| Phrolova | normal A1/A2/A3 | `0.67 / 0.60 / 0.53s` derive points from the supplied frame data |
+| Phrolova | enhanced A | `1.33s` derive point from the supplied frame data |
+| Phrolova | E | `0.53s` derive point |
+| Phrolova | enhanced E (if explicitly chained) | `1.17s` derive point; not a separate token in the current target axis |
+| Phrolova | Q (liberation) | `3.30s` animation fallback; `click_liberation` normally waits for HUD recovery |
+| Phrolova | R (echo) | `0s` cast plus `0.16s` input tail; the supplied reference treats echo as hand-off |
+| Douling | normal input | reference implementation cadence `0.10s`; this is not a per-attack frame measurement |
+| Douling | E | reference implementation tail `0.20s` after `click_resonance` |
+| Douling | Q | no extra fixed tail; `click_liberation` waits for framework team-state recovery |
+| Douling | R (echo) | no extra fixed tail; reference sends it immediately when available |
+| Douling | jump settle / aerial normal | `0.01s` jump input tail + `0.05s` settle, then `0.05s` after the aerial normal input |
+| Douling | heavy | reference `2.5s` hold; interrupted airborne holds retry up to three times |
+| Verina | normal A | `0.1s` cadence from `Hiyuki_Lucilla_Verina_a38999_1.0.0.zip` |
+| Verina | E/Q | framework state wait plus `0.22s` tail |
+| Verina | R (echo) | `0s` cast plus `0.16s` input tail |
 
-The Phrolova A-to-dodge buffer is intentional. A direct `a` followed by a short dodge could cancel the attack before its startup was accepted by the game. Each normal attack also calls `task.next_frame()` so the frame loop observes the input before the next action. These values are class constants so they can be tuned without changing the phase table. If a lower-FPS setup still drops the first A, increase Phrolova's `AXIS_NORMAL_INTERVAL` or `AXIS_DODGE_PRE_SLEEP` together; do not remove the pre-buffer.
+Phrolova's `A` notation is still one normal-attack click; it selects the longer enhanced-action window. Each attack calls `task.next_frame()` so the frame loop observes the input before the next action. The `0.06s` Phrolova interval is only a lower bound; the derive times dominate. Dodge keeps an explicit `0.20s` pre-buffer for Phrolova and `0.14s` for Douling/Verina, followed by `0.12s` recovery. Douling's values above come from the supplied Augusta/Baizhi/Buling reference implementation, not video frame extraction; update `TIMING.md` and the `AXIS_*` constants when the user's frame audit is available.
+
+Phrolova combo state is also timing-sensitive: manual entry starts the first explicit `a` at A1, while a variation intro reuses A2 and leaves the next explicit `a` at A3. After an enhanced basic attack, the next normal chain starts at A1 again. This is why the implementation tracks A1/A2/A3 instead of applying one fixed delay to every `a`.
 
 Axis resonance calls use `send_click=False` so BaseChar does not inject an undocumented extra normal click while waiting for E. The explicit phase actions remain the source of truth.
 
@@ -128,7 +143,9 @@ The snapshot has passed:
 
 - Python compilation with `python -m compileall` for all three files.
 - AST parsing for all three files.
-- Static/fake-task phase transition validation, including the initial wrong-active-character case (the latest timing-only test should be rerun before gameplay use).
+- Static/fake-task timing validation for Phrolova attack windows and the corrected `3a dodge A dodge` sub-sequence.
+- Virtual-clock validation that derive waits top up framework helper time instead of double-counting it.
+- Transition, exact-team gate, and exclusive switch-priority validation for every phase boundary.
 - Expected phase cycle validation: `0 -> 1 -> 2 -> ... -> 14 -> 8`.
 
 Full project tests were not run in the original environment because `pytest` was unavailable and the system Python lacked the project's `cv2` dependency.
