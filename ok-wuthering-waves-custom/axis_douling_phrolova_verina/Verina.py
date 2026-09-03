@@ -6,6 +6,7 @@ from src.char.BaseChar import BaseChar, SwitchPriority
 class Verina(BaseChar):
     """Verina rotation with a dedicated Phrolova/Buling team axis."""
 
+    ATTACK_INTERVAL: float = 0.1
     NORMAL_ATTACK_TIME: float = 0.6
     JUMP_ATTACK_TIME: float = 0.5
     HEAVY_ATTACK_TIME: float = 0.7
@@ -13,14 +14,21 @@ class Verina(BaseChar):
     FIELD_TIME: float = 6.5
     HEAVY_ATTACK_INTERVAL: float = 8.0
 
-    AXIS_NORMAL_INTERVAL = 0.18
+    # The reference Verina configuration uses a 0.1s attack cadence.  Skill
+    # and liberation helpers already wait for their UI state; these minimums
+    # only cover the short input tail before the next phase action.
+    AXIS_NORMAL_INTERVAL = ATTACK_INTERVAL
+    AXIS_NORMAL_CAST_TIME = ATTACK_INTERVAL
+    AXIS_ECHO_CAST_TIME = 0.0
     AXIS_DODGE_PRE_SLEEP = 0.14
     AXIS_DODGE_POST_SLEEP = 0.12
     AXIS_JUMP_POST_SLEEP = 0.14
     AXIS_SKILL_POST_SLEEP = 0.22
     AXIS_ECHO_POST_SLEEP = 0.16
     AXIS_INTRO_TIMEOUT = 1.2
+    AXIS_INTRO_LOCK = 0.90              # BaseChar/reference-package intro floor
     AXIS_INTRO_POST_SLEEP = 0.16
+    AXIS_ACTION_RETRY_SLEEP = 0.10
 
     _AXIS_TEAM = {'char_douling', 'char_phrolova', 'char_verina'}
     _AXIS_PHASE_ACTOR = {
@@ -70,14 +78,22 @@ class Verina(BaseChar):
                 'team': set(self._AXIS_TEAM),
                 'phase': 0,
                 'target': 'char_douling',
+                'step': 0,
+                'phase_started': False,
             }
             self.task._dpv_axis_state = state
+        else:
+            state.setdefault('step', 0)
+            state.setdefault('phase_started', False)
         return state
 
     def _axis_sync_phase(self):
         state = self._axis_state()
         if state.get('phase') not in self._AXIS_PHASE_ACTOR:
             state['phase'] = 0
+            state['target'] = self._AXIS_PHASE_ACTOR[0]
+            state['step'] = 0
+            state['phase_started'] = False
         return state['phase']
 
     def _axis_route_to_actor(self, phase):
@@ -91,7 +107,9 @@ class Verina(BaseChar):
 
     def _axis_wait_intro(self):
         if self.has_intro:
-            self.wait_intro(time_out=self.AXIS_INTRO_TIMEOUT, click=True)
+            started_at = time.perf_counter()
+            self.wait_intro(time_out=self.AXIS_INTRO_TIMEOUT, click=False)
+            self._axis_wait_cast(started_at, self.AXIS_INTRO_LOCK)
             self.sleep(self.AXIS_INTRO_POST_SLEEP)
 
     def _axis_advance(self, phase):
@@ -99,27 +117,68 @@ class Verina(BaseChar):
         state = self._axis_state()
         state['phase'] = next_phase
         state['target'] = target
+        state['step'] = 0
+        state['phase_started'] = False
         self.switch_next_char()
+
+    def _axis_start_phase(self):
+        state = self._axis_state()
+        if state['phase_started']:
+            return
+        self._axis_wait_intro()
+        state['phase_started'] = True
+
+    def _axis_run_actions(self, actions):
+        """Run a phase from its persistent action cursor."""
+        state = self._axis_state()
+        step = state['step']
+        while step < len(actions):
+            action = actions[step]
+            started_at = time.perf_counter()
+            result = action()
+            elapsed = time.perf_counter() - started_at
+            self.logger.debug(
+                f'dpv axis phase={state["phase"]} step={step} '
+                f'action={getattr(action, "__name__", type(action).__name__)} '
+                f'elapsed={elapsed:.3f}s result={result}'
+            )
+            if result is False:
+                state['step'] = step
+                self.sleep(self.AXIS_ACTION_RETRY_SLEEP)
+                return False
+            step += 1
+            state['step'] = step
+        return True
+
+    def _axis_wait_cast(self, started_at, cast_time):
+        remaining = cast_time - (time.perf_counter() - started_at)
+        if remaining > 0:
+            self.sleep(remaining)
 
     def _axis_normal(self, count=1, interval=None):
         if interval is None:
             interval = self.AXIS_NORMAL_INTERVAL
         for _ in range(count):
+            started_at = time.perf_counter()
             self.check_combat()
             self.click()
             self.task.next_frame()
-            self.sleep(interval)
+            self._axis_wait_cast(started_at, max(interval, self.AXIS_NORMAL_CAST_TIME))
+        return True
 
     def _axis_jump(self):
+        started_at = time.perf_counter()
         self.task.jump(after_sleep=0.01)
         self.task.next_frame()
-        self.sleep(self.AXIS_JUMP_POST_SLEEP)
+        self._axis_wait_cast(started_at, self.AXIS_JUMP_POST_SLEEP)
+        return True
 
     def _axis_dodge(self):
         self.sleep(self.AXIS_DODGE_PRE_SLEEP)
         self.task.next_frame()
         self.task.click(key='right')
         self.sleep(self.AXIS_DODGE_POST_SLEEP)
+        return True
 
     def _axis_resonance(self):
         if not self.resonance_available():
@@ -145,9 +204,11 @@ class Verina(BaseChar):
     def _axis_echo(self):
         if not self.echo_available():
             return False
+        started_at = time.perf_counter()
         clicked = self.click_echo(time_out=0)
         if clicked:
             self.task.next_frame()
+            self._axis_wait_cast(started_at, self.AXIS_ECHO_CAST_TIME)
             self.sleep(self.AXIS_ECHO_POST_SLEEP)
         return clicked
 
@@ -159,27 +220,27 @@ class Verina(BaseChar):
         phase = self._axis_sync_phase()
         if self._axis_route_to_actor(phase):
             return
-        self._axis_wait_intro()
+        self._axis_start_phase()
         if phase == 1:  # Startup: Verina e
-            self._axis_resonance()
+            actions = (self._axis_resonance,)
         elif phase == 6:  # Startup: Verina e q dodge r jump aa
-            self._axis_resonance()
-            self._axis_liberation()
-            self._axis_dodge()
-            self._axis_echo()
-            self._axis_jump()
-            self._axis_normal(2)
+            actions = (self._axis_resonance, self._axis_liberation,
+                       self._axis_dodge, self._axis_echo, self._axis_jump,
+                       lambda: self._axis_normal(2))
         elif phase == 8:  # Loop entry: Verina -> Buling
-            pass
+            actions = ()
         elif phase == 10:  # Loop: Verina e q
-            self._axis_resonance()
-            self._axis_liberation()
+            actions = (self._axis_resonance, self._axis_liberation)
         elif phase == 13:  # Loop: Verina r jump aa
+            actions = []
             if not self._axis_verina_c2():
-                self._axis_echo()
-            self._axis_jump()
-            self._axis_normal(2)
-        self._axis_advance(phase)
+                actions.append(self._axis_echo)
+            actions.extend((self._axis_jump, lambda: self._axis_normal(2)))
+            actions = tuple(actions)
+        else:
+            actions = ()
+        if self._axis_run_actions(actions):
+            self._axis_advance(phase)
 
     def perform_combat(self):
         """3A -> 大招 -> E -> 声骸 -> (重击) -> 跳跃 -> 2A; 协奏满/超时则提前结束去切人。"""
