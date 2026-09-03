@@ -19,12 +19,16 @@ class Phrolova(BaseChar):
     AXIS_DODGE_PRE_SLEEP = 0.20
     AXIS_DODGE_POST_SLEEP = 0.12
     AXIS_JUMP_POST_SLEEP = 0.14
-    AXIS_SKILL_POST_SLEEP = 0.22
-    AXIS_ECHO_POST_SLEEP = 0.16
+    AXIS_SKILL_POST_SLEEP = 0.0
+    AXIS_ECHO_POST_SLEEP = 2.0
     AXIS_INTRO_TIMEOUT = 1.2
     AXIS_INTRO_LOCK = 1.30
     AXIS_INTRO_POST_SLEEP = 0.16
     AXIS_ACTION_RETRY_SLEEP = 0.10
+    # UI availability checks can lag briefly after a character switch or
+    # animation. Do not let one unavailable optional action deadlock the axis.
+    AXIS_ACTION_WAIT_TIMEOUT = 3.0
+    AXIS_LIBERATION_WAIT_TIMEOUT = 10.0
     AXIS_HEAVY_DURATION = 2.32                  # heavy unlocks Q at frame 139
 
     _AXIS_TEAM = {'char_douling', 'char_phrolova', 'char_verina'}
@@ -46,11 +50,11 @@ class Phrolova(BaseChar):
         14: 'char_phrolova',
     }
     _AXIS_NEXT = {
-        2: (3, 'char_douling'),
-        4: (5, 'char_douling'),
-        7: (8, 'char_verina'),
-        12: (13, 'char_verina'),
-        14: (8, 'char_verina'),
+        2: (3, 'char_douling', False),
+        4: (5, 'char_douling', True),
+        7: (8, 'char_verina', True),
+        12: (13, 'char_verina', False),
+        14: (8, 'char_verina', True),
     }
 
     def __init__(self, *args, **kwargs):
@@ -82,11 +86,13 @@ class Phrolova(BaseChar):
                 'target': 'char_douling',
                 'step': 0,
                 'phase_started': False,
+                'step_wait_started': None,
             }
             self.task._dpv_axis_state = state
         else:
             state.setdefault('step', 0)
             state.setdefault('phase_started', False)
+            state.setdefault('step_wait_started', None)
         return state
 
     def _axis_sync_phase(self):
@@ -96,6 +102,7 @@ class Phrolova(BaseChar):
             state['target'] = self._AXIS_PHASE_ACTOR[0]
             state['step'] = 0
             state['phase_started'] = False
+            state['step_wait_started'] = None
         return state['phase']
 
     def _axis_route_to_actor(self, phase):
@@ -104,7 +111,50 @@ class Phrolova(BaseChar):
             return False
         state = self._axis_state()
         state['target'] = actor
-        self.switch_next_char()
+        self._axis_switch_to(actor)
+        return True
+
+    def _axis_switch_to(self, target_name, free_intro=False):
+        """Directly switch by slot, bypassing target search and switch chooser."""
+        target = next(
+            (char for char in getattr(self.task, 'chars', ())
+             if char is not None and getattr(char, 'char_name', None) == target_name),
+            None,
+        )
+        if target is None:
+            self.logger.warning(f'dpv axis target not found: {target_name}')
+            return False
+        source = self
+        slot = target.index + 1
+        start = time.time()
+        last_send = 0.0
+        switched = False
+        while time.time() - start < 2.0:
+            now = time.time()
+            if now - last_send >= 0.10:
+                self.task.send_key(slot, down_time=0.01)
+                last_send = now
+            self.task.next_frame()
+            in_team, current_index, _ = self.task.in_team()
+            if in_team and current_index == target.index:
+                switched = True
+                break
+        if not switched:
+            self.logger.warning(f'dpv direct switch failed: {source.char_name} -> {target.char_name}')
+            return False
+        self.task.in_liberation = False
+        source.switch_out(con_full=free_intro)
+        target.is_current_char = True
+        target.has_intro = free_intro
+        target.has_sub_dps_intro = free_intro and source.is_sub_dps
+        target.last_switch_in_time = time.time()
+        if free_intro:
+            now = time.time()
+            self.task.add_freeze_duration(now, target.intro_motion_freeze_duration, -100)
+            source.last_outro_time = now
+        self.logger.info(
+            f'dpv direct switch {source.char_name} -> {target.char_name} '
+            f'free_intro={free_intro}')
         return True
 
     def _axis_wait_intro(self):
@@ -117,13 +167,14 @@ class Phrolova(BaseChar):
             self.sleep(self.AXIS_INTRO_POST_SLEEP)
 
     def _axis_advance(self, phase):
-        next_phase, target = self._AXIS_NEXT[phase]
+        next_phase, target, free_intro = self._AXIS_NEXT[phase]
         state = self._axis_state()
         state['phase'] = next_phase
         state['target'] = target
         state['step'] = 0
         state['phase_started'] = False
-        self.switch_next_char()
+        state['step_wait_started'] = None
+        self._axis_switch_to(target, free_intro=free_intro)
 
     def _axis_start_phase(self):
         state = self._axis_state()
@@ -155,23 +206,38 @@ class Phrolova(BaseChar):
             )
             if result is False:
                 state['step'] = step
-                self.sleep(self.AXIS_ACTION_RETRY_SLEEP)
+                now = time.perf_counter()
+                if state.get('step_wait_started') is None:
+                    state['step_wait_started'] = now
+                waited = now - state['step_wait_started']
+                if waited >= self.AXIS_ACTION_WAIT_TIMEOUT:
+                    self.logger.warning(
+                        f'dpv axis phase={state["phase"]} step={step} '
+                        f'action unavailable for {waited:.1f}s; skipping'
+                    )
+                    state['step'] = step + 1
+                    state['step_wait_started'] = None
+                    step += 1
+                    continue
+                self.sleep(self.AXIS_ACTION_RETRY_SLEEP, check_combat=False)
                 return False
             step += 1
             state['step'] = step
+            state['step_wait_started'] = None
         return True
 
     def _axis_wait_cast(self, started_at, cast_time):
         remaining = cast_time - (time.perf_counter() - started_at)
         if remaining > 0:
-            self.sleep(remaining)
+            # During a liberation/echo animation the target HUD can vanish;
+            # combat detection must not abort the hand-off in that window.
+            self.sleep(remaining, check_combat=False)
 
     def _axis_normal(self, count=1, interval=None):
         if interval is None:
             interval = self.AXIS_NORMAL_INTERVAL
         for _ in range(count):
             started_at = time.perf_counter()
-            self.check_combat()
             self.click()
             self.task.next_frame()
             cast_time = self.AXIS_NORMAL_CAST_TIMES[
@@ -183,7 +249,6 @@ class Phrolova(BaseChar):
 
     def _axis_enhanced(self):
         started_at = time.perf_counter()
-        self.check_combat()
         self.click()
         self.task.next_frame()
         self._axis_wait_cast(started_at, self.AXIS_ENHANCED_CAST_TIME)
@@ -235,15 +300,17 @@ class Phrolova(BaseChar):
         return clicked
 
     def _axis_liberation(self):
-        if not self.liberation_available():
-            return False
+        # This fixed axis must not branch on the unreliable Q icon OCR. Send
+        # the configured key at the scripted position and let the game accept
+        # it when energy is ready; never wait here and never skip into another
+        # phase because the icon was not detected.
         started_at = time.perf_counter()
-        clicked = self.click_liberation(wait_if_cd_ready=0)
-        if clicked:
-            self.task.next_frame()
-            self._axis_wait_cast(started_at, self.AXIS_LIBERATION_CAST_TIME)
-            self.sleep(self.AXIS_SKILL_POST_SLEEP)
-        return clicked
+        self.send_liberation_key()
+        self.record_liberation_use()
+        self.task.next_frame()
+        self._axis_wait_cast(started_at, self.AXIS_LIBERATION_CAST_TIME)
+        self.sleep(self.AXIS_SKILL_POST_SLEEP, check_combat=False)
+        return True
 
     def _axis_echo(self):
         if not self.echo_available():
@@ -253,7 +320,7 @@ class Phrolova(BaseChar):
         if clicked:
             self.task.next_frame()
             self._axis_wait_cast(started_at, self.AXIS_ECHO_CAST_TIME)
-            self.sleep(self.AXIS_ECHO_POST_SLEEP)
+            self.sleep(self.AXIS_ECHO_POST_SLEEP, check_combat=False)
         return clicked
 
     def _do_axis_perform(self):
@@ -264,21 +331,22 @@ class Phrolova(BaseChar):
         self._axis_start_phase()
         if phase == 2:  # Startup: Phrolova aa q A e A z
             actions = (
-                lambda: self._axis_normal(2), self._axis_liberation,
+                lambda: self._axis_normal(2), self._axis_echo,
                 self._axis_enhanced, self._axis_resonance,
                 self._axis_enhanced, self._axis_heavy,
             )
         elif phase == 4:  # Startup: Phrolova a dodge A r
             actions = (self._axis_normal, self._axis_dodge,
-                       self._axis_enhanced, self._axis_echo)
+                       self._axis_enhanced, self._axis_liberation)
         elif phase == 7:  # Startup: Phrolova a dodge A e A dodge 3a dodge A dodge 3a dodge A dodge 3a q A z r
             actions = (
                 self._axis_normal, self._axis_dodge, self._axis_enhanced,
                 self._axis_resonance, self._axis_enhanced, self._axis_dodge,
                 self._axis_three_normal_dodge, self._axis_three_normal_dodge,
-                self._axis_three_normal_dodge, lambda: self._axis_normal(3),
-                self._axis_liberation, self._axis_enhanced,
-                self._axis_heavy, self._axis_echo,
+                self._axis_three_normal_dodge, self._axis_three_normal_dodge,
+                lambda: self._axis_normal(3),
+                self._axis_echo, self._axis_enhanced,
+                self._axis_heavy, self._axis_liberation,
             )
         elif phase == 12:  # Loop: Phrolova a dodge A e A
             actions = (self._axis_normal, self._axis_dodge,
@@ -288,9 +356,9 @@ class Phrolova(BaseChar):
             actions = (
                 self._axis_normal, self._axis_dodge, self._axis_enhanced,
                 self._axis_three_normal_dodge, self._axis_three_normal_dodge,
-                lambda: self._axis_normal(3), self._axis_liberation,
+                 lambda: self._axis_normal(3), self._axis_echo,
                 self._axis_enhanced, self._axis_resonance,
-                self._axis_enhanced, self._axis_heavy, self._axis_echo,
+                 self._axis_enhanced, self._axis_heavy, self._axis_liberation,
             )
         else:
             actions = ()

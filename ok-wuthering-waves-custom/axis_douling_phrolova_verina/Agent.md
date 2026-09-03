@@ -28,8 +28,8 @@ Do not combine the three classes into one Python file, rename the classes, or re
 - `a` / `A`: normal attack. Uppercase `A` is intentionally treated as the same basic attack click.
 - `z` / `Z`: heavy attack, produced by holding the basic attack button.
 - `e`: resonance skill, through `click_resonance`.
-- `q`: liberation, through `click_liberation`.
-- `r`: echo, through `click_echo`.
+- `q`: echo, through `click_echo` (声骸技能; no energy requirement).
+- `r`: liberation, through `click_liberation` (共鸣解放; requires energy).
 - `闪`: one right-click dodge, through `task.click(key='right')`, with explicit pre/post buffers.
 - `跳`: jump, through `task.jump`.
 - Skill keys are resolved through OKWW's configured key mappings; the code does not assume the physical letters for `q` and `r`.
@@ -113,13 +113,14 @@ Each completed or failed action emits a debug record with its phase, step, calla
 | Phrolova | R (echo) | `0s` cast plus `0.16s` input tail; the supplied reference treats echo as hand-off |
 | Douling | normal input | reference implementation cadence `0.10s`; this is not a per-attack frame measurement |
 | Douling | E | reference implementation tail `0.20s` after `click_resonance` |
-| Douling | Q | no extra fixed tail; `click_liberation` waits for framework team-state recovery |
-| Douling | R (echo) | no extra fixed tail; reference sends it immediately when available |
+| Douling | Q (echo) | no extra fixed tail; `click_echo(time_out=0)` |
+| Douling | R (liberation) | framework team-state recovery; used at the scripted R position |
 | Douling | jump settle / aerial normal | `0.01s` jump input tail + `0.05s` settle, then `0.05s` after the aerial normal input |
 | Douling | heavy | reference `2.5s` hold; interrupted airborne holds retry up to three times |
 | Verina | normal A | `0.1s` cadence from `Hiyuki_Lucilla_Verina_a38999_1.0.0.zip` |
-| Verina | E/Q | framework state wait plus `0.22s` tail |
-| Verina | R (echo) | `0s` cast plus `0.16s` input tail |
+| Verina | E | framework state wait plus `0.22s` tail |
+| Verina | Q (echo) | `click_echo(time_out=0)` |
+| Verina | R (liberation) | framework team-state recovery |
 
 Phrolova's `A` notation is still one normal-attack click; it selects the longer enhanced-action window. Each attack calls `task.next_frame()` so the frame loop observes the input before the next action. The `0.06s` Phrolova interval is only a lower bound; the derive times dominate. Dodge keeps an explicit `0.20s` pre-buffer for Phrolova and `0.14s` for Douling/Verina, followed by `0.12s` recovery. Douling's values above come from the supplied Augusta/Baizhi/Buling reference implementation, not video frame extraction; update `TIMING.md` and the `AXIS_*` constants when the user's frame audit is available.
 
@@ -131,7 +132,7 @@ Axis resonance calls use `send_click=False` so BaseChar does not inject an undoc
 
 1. Ensure the team contains exactly these three characters and all three have a main echo equipped.
 2. Synchronize OKWW's Resonance, Liberation, Echo, Dodge, and Jump mappings with the game.
-3. Keep `Use Liberation` enabled; the route explicitly uses `q` at several phases.
+3. Keep `Use Liberation` enabled; the route explicitly uses `r` at several phases. `q` is the echo key in this setup.
 4. Keep `Check Levitator` enabled so aerial state checks used by Douling's jump/heavy sequence are available.
 5. Set `Verina C2` to `True` only when the Verina is actually C2; this skips the loop phase 13 echo.
 6. Restart OKWW after replacing source files or changing custom team code so imported classes and team-code caches are refreshed.
@@ -149,6 +150,21 @@ The snapshot has passed:
 - Expected phase cycle validation: `0 -> 1 -> 2 -> ... -> 14 -> 8`.
 
 Full project tests were not run in the original environment because `pytest` was unavailable and the system Python lacked the project's `cv2` dependency.
+
+## Manual Test Result (2026-09-03)
+
+The current snapshot was manually verified in OKWW with the exact Buling/Phrolova/Verina team:
+
+- Startup prefix `Buling aa -> Verina E -> Phrolova aa Q A` executed correctly; Q triggered the echo and the following enhanced basic attack was accepted.
+- Phrolova's scripted R completed and the axis immediately handed off to the next character without the previous multi-second target-search pause.
+
+## Troubleshooting History
+
+- The first persistent-step implementation retried unavailable Q/E/R actions forever or for a long timeout; mandatory actions must not be silently skipped into a later phase.
+- The local setup uses `Q = echo` and `R = liberation`. Reversing these mappings makes phase 2 appear to stop after two A inputs because the code waits for a charged liberation in the Q slot.
+- `switch_next_char()` performs framework target selection and combat/target checks. During liberation or echo animations the target HUD can disappear, producing `target lost` and an apparent pause.
+- Axis hand-offs therefore use the reference package's direct slot-switch pattern: send the numeric slot key, confirm the active slot with `in_team()` without middle-click retargeting, then perform the same character state bookkeeping as `switch_next_char()`.
+- Do not update `is_current_char` or `has_intro` before the slot switch is confirmed; doing so desynchronizes the framework from the game and is worse than waiting.
 
 ## Maintenance Rules
 

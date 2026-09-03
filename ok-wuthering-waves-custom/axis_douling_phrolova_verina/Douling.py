@@ -34,6 +34,7 @@ class Douling(BaseChar):
     AXIS_INTRO_LOCK = 0.90              # provisional; replace after frame audit
     AXIS_INTRO_POST_SLEEP = 0.16
     AXIS_ACTION_RETRY_SLEEP = 0.10
+    AXIS_ACTION_WAIT_TIMEOUT = 3.0
 
     _AXIS_TEAM = {'char_douling', 'char_phrolova', 'char_verina'}
     _AXIS_PHASE_ACTOR = {
@@ -54,11 +55,11 @@ class Douling(BaseChar):
         14: 'char_phrolova',
     }
     _AXIS_NEXT = {
-        0: (1, 'char_verina'),
-        3: (4, 'char_phrolova'),
-        5: (6, 'char_verina'),
-        9: (10, 'char_verina'),
-        11: (12, 'char_phrolova'),
+        0: (1, 'char_verina', False),
+        3: (4, 'char_phrolova', True),
+        5: (6, 'char_verina', False),
+        9: (10, 'char_verina', False),
+        11: (12, 'char_phrolova', True),
     }
 
     def __init__(self, *args, **kwargs):
@@ -87,11 +88,13 @@ class Douling(BaseChar):
                 'target': 'char_douling',
                 'step': 0,
                 'phase_started': False,
+                'step_wait_started': None,
             }
             self.task._dpv_axis_state = state
         else:
             state.setdefault('step', 0)
             state.setdefault('phase_started', False)
+            state.setdefault('step_wait_started', None)
         return state
 
     def _axis_sync_phase(self):
@@ -101,6 +104,7 @@ class Douling(BaseChar):
             state['target'] = self._AXIS_PHASE_ACTOR[0]
             state['step'] = 0
             state['phase_started'] = False
+            state['step_wait_started'] = None
         return state['phase']
 
     def _axis_route_to_actor(self, phase):
@@ -109,7 +113,47 @@ class Douling(BaseChar):
             return False
         state = self._axis_state()
         state['target'] = actor
-        self.switch_next_char()
+        self._axis_switch_to(actor)
+        return True
+
+    def _axis_switch_to(self, target_name, free_intro=False):
+        target = next(
+            (char for char in getattr(self.task, 'chars', ())
+             if char is not None and getattr(char, 'char_name', None) == target_name),
+            None,
+        )
+        if target is None:
+            self.logger.warning(f'dpv axis target not found: {target_name}')
+            return False
+        source = self
+        slot = target.index + 1
+        start = time.time()
+        last_send = 0.0
+        switched = False
+        while time.time() - start < 2.0:
+            now = time.time()
+            if now - last_send >= 0.10:
+                self.task.send_key(slot, down_time=0.01)
+                last_send = now
+            self.task.next_frame()
+            in_team, current_index, _ = self.task.in_team()
+            if in_team and current_index == target.index:
+                switched = True
+                break
+        if not switched:
+            self.logger.warning(f'dpv direct switch failed: {source.char_name} -> {target.char_name}')
+            return False
+        self.task.in_liberation = False
+        source.switch_out(con_full=free_intro)
+        target.is_current_char = True
+        target.has_intro = free_intro
+        target.has_sub_dps_intro = free_intro and source.is_sub_dps
+        target.last_switch_in_time = time.time()
+        if free_intro:
+            now = time.time()
+            self.task.add_freeze_duration(now, target.intro_motion_freeze_duration, -100)
+            source.last_outro_time = now
+        self.logger.info(f'dpv direct switch {source.char_name} -> {target.char_name} free_intro={free_intro}')
         return True
 
     def _axis_wait_intro(self):
@@ -120,13 +164,14 @@ class Douling(BaseChar):
             self.sleep(self.AXIS_INTRO_POST_SLEEP)
 
     def _axis_advance(self, phase):
-        next_phase, target = self._AXIS_NEXT[phase]
+        next_phase, target, free_intro = self._AXIS_NEXT[phase]
         state = self._axis_state()
         state['phase'] = next_phase
         state['target'] = target
         state['step'] = 0
         state['phase_started'] = False
-        self.switch_next_char()
+        state['step_wait_started'] = None
+        self._axis_switch_to(target, free_intro=free_intro)
 
     def _axis_start_phase(self):
         state = self._axis_state()
@@ -151,16 +196,27 @@ class Douling(BaseChar):
             )
             if result is False:
                 state['step'] = step
+                now = time.perf_counter()
+                if state.get('step_wait_started') is None:
+                    state['step_wait_started'] = now
+                if now - state['step_wait_started'] >= self.AXIS_ACTION_WAIT_TIMEOUT:
+                    self.logger.warning(
+                        f'dpv axis phase={state["phase"]} step={step} unavailable; skipping')
+                    state['step'] = step + 1
+                    state['step_wait_started'] = None
+                    step += 1
+                    continue
                 self.sleep(self.AXIS_ACTION_RETRY_SLEEP)
                 return False
             step += 1
             state['step'] = step
+            state['step_wait_started'] = None
         return True
 
     def _axis_wait_cast(self, started_at, cast_time):
         remaining = cast_time - (time.perf_counter() - started_at)
         if remaining > 0:
-            self.sleep(remaining)
+            self.sleep(remaining, check_combat=False)
 
     def _axis_normal(self, count=1, interval=None, cast_time=None):
         if interval is None:
@@ -201,7 +257,7 @@ class Douling(BaseChar):
         if clicked:
             self.task.next_frame()
             self._axis_wait_cast(started_at, self.AXIS_ECHO_CAST_TIME)
-            self.sleep(self.AXIS_ECHO_POST_SLEEP)
+            self.sleep(self.AXIS_ECHO_POST_SLEEP, check_combat=False)
         return clicked
 
     def _axis_resonance(self):
@@ -226,7 +282,7 @@ class Douling(BaseChar):
         if clicked:
             self.task.next_frame()
             self._axis_wait_cast(started_at, self.AXIS_LIBERATION_CAST_TIME)
-            self.sleep(self.AXIS_LIBERATION_POST_SLEEP)
+            self.sleep(self.AXIS_LIBERATION_POST_SLEEP, check_combat=False)
         return clicked
 
     def _do_axis_perform(self):
@@ -243,9 +299,9 @@ class Douling(BaseChar):
                            interval=self.AXIS_AERIAL_NORMAL_INTERVAL,
                            cast_time=self.AXIS_AERIAL_NORMAL_CAST_TIME,
                        ),
-                       self._axis_heavy, self._axis_echo)
+                        self._axis_heavy, self._axis_liberation)
         elif phase == 5:  # Startup: Buling aa q
-            actions = (lambda: self._axis_normal(2), self._axis_liberation)
+            actions = (lambda: self._axis_normal(2), self._axis_echo)
         elif phase == 9:  # Loop: Buling e a jump a z z
             actions = (self._axis_resonance, self._axis_normal,
                        self._axis_jump,
@@ -256,7 +312,7 @@ class Douling(BaseChar):
                        self._axis_heavy, self._axis_heavy)
         elif phase == 11:  # Loop: Buling aa q r
             actions = (lambda: self._axis_normal(2),
-                       self._axis_liberation, self._axis_echo)
+                       self._axis_echo, self._axis_liberation)
         else:
             actions = ()
         if self._axis_run_actions(actions):
