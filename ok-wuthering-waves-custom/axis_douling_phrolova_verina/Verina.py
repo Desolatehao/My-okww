@@ -29,7 +29,10 @@ class Verina(BaseChar):
     AXIS_INTRO_LOCK = 0.90              # BaseChar/reference-package intro floor
     AXIS_INTRO_POST_SLEEP = 0.16
     AXIS_ACTION_RETRY_SLEEP = 0.10
-    AXIS_ACTION_WAIT_TIMEOUT = 3.0
+    # The reference loop moves on within roughly one second when R is not
+    # available; avoid holding the character in phase 13 for a full retry
+    # window and appearing idle at the end of a run.
+    AXIS_ACTION_WAIT_TIMEOUT = 1.0
 
     _AXIS_TEAM = {'char_douling', 'char_phrolova', 'char_verina'}
     _AXIS_PHASE_ACTOR = {
