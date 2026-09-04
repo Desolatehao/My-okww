@@ -246,8 +246,11 @@ class Douling(BaseChar):
             duration = self.AXIS_HEAVY_CAST_TIME
         if self.flying():
             self.wait_down()
-        self._heavy_attack_hold(duration)
-        return True
+        completed = self._heavy_attack_hold(duration)
+        if not completed:
+            self.logger.warning(
+                f'dpv axis heavy interrupted phase={self._axis_state().get("phase")}')
+        return completed
 
     def _axis_echo(self):
         if not self.echo_available():
@@ -306,6 +309,7 @@ class Douling(BaseChar):
             actions = (self._axis_resonance, self._axis_normal,
                        self._axis_jump,
                        lambda: self._axis_normal(
+                           count=2,
                            interval=self.AXIS_AERIAL_NORMAL_INTERVAL,
                            cast_time=self.AXIS_AERIAL_NORMAL_CAST_TIME,
                        ),
@@ -383,8 +387,9 @@ class Douling(BaseChar):
             self.task.mouse_up()
             self.sleep(0.01)
             if not interrupted:
-                return
+                return True
             self.wait_down()
+        return False
 
     def reset_state(self):
         super().reset_state()

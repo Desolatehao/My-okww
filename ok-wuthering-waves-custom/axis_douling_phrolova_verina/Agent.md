@@ -19,7 +19,7 @@ For the customized checkout, the direct source-file method is the simplest:
 3. Restart OKWW so the imported character classes and team-code cache are refreshed.
 4. Start Auto Combat with exactly Buling, Phrolova, and Verina in the detected team.
 
-The Qt Character Code tab is the alternative for keeping the change team-scoped. Create or import a custom team containing exactly these three characters, then replace and save the corresponding `Douling.py`, `Phrolova.py`, and `Verina.py` entries. For direct archive import, use `弗卜维_施法时序_1.0.3.zip` in this folder; it contains the current three files and the required `team.json`. The older `弗卜维.zip`, `弗卜维_施法时序_1.0.1.zip`, and `弗卜维_施法时序_1.0.2.zip` are preserved as historical artifacts and must not be used for current testing.
+The Qt Character Code tab is the alternative for keeping the change team-scoped. Create or import a custom team containing exactly these three characters, then replace and save the corresponding `Douling.py`, `Phrolova.py`, and `Verina.py` entries. This independent snapshot is version `1.0.6`; use the files in this folder together with `MANUAL_TIMELINE_24FPS.md` and `PROGRESS_1.0.6.md` for the current test baseline. The older archives are preserved as historical artifacts and must not be used for current testing.
 
 Do not combine the three classes into one Python file, rename the classes, or replace `BaseChar.py`. The axis gate depends on the canonical names `char_douling`, `char_phrolova`, and `char_verina`.
 
@@ -122,7 +122,7 @@ Each completed or failed action emits a debug record with its phase, step, calla
 | Verina | Q (echo) | `click_echo(time_out=0)` |
 | Verina | R (liberation) | framework team-state recovery |
 
-Phrolova's `A` notation is still one normal-attack click; it selects the longer enhanced-action window. Each attack calls `task.next_frame()` so the frame loop observes the input before the next action. The `0.06s` Phrolova interval is only a lower bound; the derive times dominate. Dodge keeps an explicit `0.20s` pre-buffer for Phrolova and `0.14s` for Douling/Verina, followed by `0.12s` recovery. Douling's values above come from the supplied Augusta/Baizhi/Buling reference implementation, not video frame extraction; update `TIMING.md` and the `AXIS_*` constants when the user's frame audit is available.
+Phrolova's `A` notation is still one normal-attack click; it selects the longer enhanced-action window. Each attack calls `task.next_frame()` so the frame loop observes the input before the next action. The `0.06s` Phrolova interval is only a lower bound; the derive times dominate. In version 1.0.6, ordinary dodge-to-enhanced-A uses a `0.12s` pre-buffer plus a `0.04s` tail, with the A queued during dodge; chain sections use a separate `0.55s` settle window. Phrolova's Z is currently `1.33s` from the manual 24 FPS observation, not the older reference-package `2.32s` value, and remains subject to in-game validation. Douling's values above come from the supplied Augusta/Baizhi/Buling reference implementation, not video frame extraction; update `TIMING.md` and the `AXIS_*` constants when a newer frame audit is available.
 
 Phrolova combo state is also timing-sensitive: manual entry starts the first explicit `a` at A1, while a variation intro reuses A2 and leaves the next explicit `a` at A3. After an enhanced basic attack, the next normal chain starts at A1 again. This is why the implementation tracks A1/A2/A3 instead of applying one fixed delay to every `a`.
 

@@ -1,7 +1,7 @@
 {
   "name": "弗卜维_施法时序",
-  "description": "卜灵、弗洛洛、维里奈固定启动与循环轴；卜灵参数已加入参考包等待值，视频帧测后可继续校准。",
+  "description": "卜灵、弗洛洛、维里奈固定启动与循环轴；基于24 FPS目标视频手动时间线完成1.0.6时序调整，F键机制暂不加入，待实机复测。",
   "author": "Codex",
-  "version": "1.0.3",
+  "version": "1.0.6",
   "team": "Buling, Phrolova, Verina"
 }

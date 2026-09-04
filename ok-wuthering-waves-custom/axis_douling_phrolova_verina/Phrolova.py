@@ -12,12 +12,20 @@ class Phrolova(BaseChar):
     # while the cast times below protect each action boundary.
     AXIS_NORMAL_INTERVAL = 0.06
     AXIS_NORMAL_CAST_TIMES = (0.67, 0.60, 0.53)  # A1/A2/A3 derive points
-    AXIS_ENHANCED_CAST_TIME = 1.33               # enhanced basic attack
+    AXIS_ENHANCED_CAST_TIME = 1.33               # standalone enhanced basic attack
+    # In the reference video the enhanced A is queued during dodge and the
+    # dodge cancels part of its startup/recovery. Keep this shorter window
+    # separate from standalone enhanced attacks used outside dodge chains.
+    AXIS_DODGE_ENHANCED_DELAY = 0.04
+    # 24 FPS reference: dodge -> enhanced A is about 6 frames.  Chained
+    # 3A sections need a slightly longer settle before the next dodge.
+    AXIS_DODGE_ENHANCED_CAST_TIME = 0.25
+    AXIS_CHAIN_DODGE_ENHANCED_CAST_TIME = 0.55
     AXIS_SKILL_CAST_TIME = 0.53                  # E derive point
     AXIS_LIBERATION_CAST_TIME = 3.30             # Q animation fallback
     AXIS_ECHO_CAST_TIME = 0.0                    # R is a hand-off echo
-    AXIS_DODGE_PRE_SLEEP = 0.20
-    AXIS_DODGE_POST_SLEEP = 0.12
+    AXIS_DODGE_PRE_SLEEP = 0.12
+    AXIS_DODGE_POST_SLEEP = 0.04
     AXIS_JUMP_POST_SLEEP = 0.14
     AXIS_SKILL_POST_SLEEP = 0.0
     AXIS_ECHO_POST_SLEEP = 2.0
@@ -27,9 +35,11 @@ class Phrolova(BaseChar):
     AXIS_ACTION_RETRY_SLEEP = 0.10
     # UI availability checks can lag briefly after a character switch or
     # animation. Do not let one unavailable optional action deadlock the axis.
-    AXIS_ACTION_WAIT_TIMEOUT = 3.0
+    AXIS_ACTION_WAIT_TIMEOUT = 1.5
     AXIS_LIBERATION_WAIT_TIMEOUT = 10.0
-    AXIS_HEAVY_DURATION = 2.32                  # heavy unlocks Q at frame 139
+    # In the reference capture Z runs from 00:00:42:02 to 00:00:43:10
+    # (about 1.33s).  The previous 2.32s frame-data value delayed R too much.
+    AXIS_HEAVY_DURATION = 1.33
 
     _AXIS_TEAM = {'char_douling', 'char_phrolova', 'char_verina'}
     _AXIS_PHASE_ACTOR = {
@@ -257,10 +267,33 @@ class Phrolova(BaseChar):
         self._axis_attack_index = 0
         return True
 
+    def _axis_dodge_enhanced(self, cast_time=None):
+        """Dodge and queue enhanced A before the dodge animation ends."""
+        if cast_time is None:
+            cast_time = self.AXIS_DODGE_ENHANCED_CAST_TIME
+        started_at = time.perf_counter()
+        self.sleep(self.AXIS_DODGE_PRE_SLEEP)
+        self.task.next_frame()
+        self.task.click(key='right')
+        self.sleep(self.AXIS_DODGE_ENHANCED_DELAY)
+        self.click()
+        self.task.next_frame()
+        self._axis_wait_cast(started_at, cast_time)
+        self._axis_attack_index = 0
+        return True
+
+    def _axis_enhanced_followup(self):
+        """Queue the next enhanced A with the short post-chain window."""
+        started_at = time.perf_counter()
+        self.click()
+        self.task.next_frame()
+        self._axis_wait_cast(started_at, self.AXIS_DODGE_ENHANCED_CAST_TIME)
+        self._axis_attack_index = 0
+        return True
+
     def _axis_three_normal_dodge(self):
         self._axis_normal(3)
-        self._axis_dodge()
-        self._axis_enhanced()
+        self._axis_dodge_enhanced(self.AXIS_CHAIN_DODGE_ENHANCED_CAST_TIME)
         self._axis_dodge()
         return True
 
@@ -323,6 +356,16 @@ class Phrolova(BaseChar):
             self.sleep(self.AXIS_ECHO_POST_SLEEP, check_combat=False)
         return clicked
 
+    def _axis_echo_queue_next(self):
+        """Use echo as a hand-off and queue the next A during its animation."""
+        if not self.echo_available():
+            return False
+        clicked = self.click_echo(time_out=0)
+        if clicked:
+            self.task.next_frame()
+            self.sleep(0.04, check_combat=False)
+        return clicked
+
     def _do_axis_perform(self):
         self.last_liberation = -1
         phase = self._axis_sync_phase()
@@ -331,30 +374,30 @@ class Phrolova(BaseChar):
         self._axis_start_phase()
         if phase == 2:  # Startup: Phrolova aa q A e A z
             actions = (
-                lambda: self._axis_normal(2), self._axis_echo,
-                self._axis_enhanced, self._axis_resonance,
-                self._axis_enhanced, self._axis_heavy,
+                lambda: self._axis_normal(2), self._axis_echo_queue_next,
+                self._axis_enhanced_followup, self._axis_resonance,
+                self._axis_enhanced_followup, self._axis_heavy,
             )
         elif phase == 4:  # Startup: Phrolova a dodge A r
-            actions = (self._axis_normal, self._axis_dodge,
-                       self._axis_enhanced, self._axis_liberation)
+            actions = (self._axis_normal, self._axis_dodge_enhanced,
+                       self._axis_liberation)
         elif phase == 7:  # Startup: Phrolova a dodge A e A dodge 3a dodge A dodge 3a dodge A dodge 3a q A z r
             actions = (
-                self._axis_normal, self._axis_dodge, self._axis_enhanced,
-                self._axis_resonance, self._axis_enhanced, self._axis_dodge,
+                self._axis_normal, self._axis_dodge_enhanced,
+                self._axis_resonance, self._axis_enhanced_followup,
+                self._axis_dodge,
                 self._axis_three_normal_dodge, self._axis_three_normal_dodge,
-                self._axis_three_normal_dodge, self._axis_three_normal_dodge,
+                self._axis_three_normal_dodge,
                 lambda: self._axis_normal(3),
                 self._axis_echo, self._axis_enhanced,
                 self._axis_heavy, self._axis_liberation,
             )
         elif phase == 12:  # Loop: Phrolova a dodge A e A
-            actions = (self._axis_normal, self._axis_dodge,
-                       self._axis_enhanced, self._axis_resonance,
-                       self._axis_enhanced)
+            actions = (self._axis_normal, self._axis_dodge_enhanced,
+                       self._axis_resonance, self._axis_enhanced_followup)
         elif phase == 14:  # Loop: Phrolova a dodge A 3a dodge A dodge 3a dodge A dodge 3a q A e A z r
             actions = (
-                self._axis_normal, self._axis_dodge, self._axis_enhanced,
+                self._axis_normal, self._axis_dodge_enhanced,
                 self._axis_three_normal_dodge, self._axis_three_normal_dodge,
                  lambda: self._axis_normal(3), self._axis_echo,
                 self._axis_enhanced, self._axis_resonance,
