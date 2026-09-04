@@ -3,38 +3,40 @@ import time
 from src.char.BaseChar import BaseChar, SwitchPriority
 
 
-class Douling(BaseChar):
-    """Buling rotation with a dedicated Phrolova/Verina team axis."""
+class Verina(BaseChar):
+    """Verina rotation with a dedicated Phrolova/Buling team axis."""
 
-    # The reference Buling implementation uses cycle_sleep()'s 0.1s input
-    # cadence, an explicit 0.2s skill tail, a 0.05s jump settle, and a 2.5s
-    # heavy-attack hold. These are implementation timings, not video-frame
-    # measurements; keep the frame-audit table in TIMING.md as the authority
-    # for later replacement.
-    AXIS_NORMAL_INTERVAL = 0.10
-    AXIS_NORMAL_CAST_TIME = 0.10
-    AXIS_AERIAL_NORMAL_INTERVAL = 0.05
-    AXIS_AERIAL_NORMAL_CAST_TIME = 0.05
-    AXIS_AERIAL_NORMAL_POST_SLEEP = 0.05
-    AXIS_SKILL_CAST_TIME = 0.20
-    AXIS_LIBERATION_CAST_TIME = 0.0
+    ATTACK_INTERVAL: float = 0.1
+    NORMAL_ATTACK_TIME: float = 0.6
+    JUMP_ATTACK_TIME: float = 0.5
+    HEAVY_ATTACK_TIME: float = 0.7
+    RECOVER_TIME: float = 0.8
+    FIELD_TIME: float = 6.5
+    HEAVY_ATTACK_INTERVAL: float = 8.0
+
+    # The reference Verina configuration uses a 0.1s attack cadence.  Skill
+    # and liberation helpers already wait for their UI state; these minimums
+    # only cover the short input tail before the next phase action.
+    AXIS_NORMAL_INTERVAL = ATTACK_INTERVAL
+    AXIS_NORMAL_CAST_TIME = ATTACK_INTERVAL
     AXIS_ECHO_CAST_TIME = 0.0
-    AXIS_HEAVY_CAST_TIME = 2.50
-    AXIS_SEGMENT1_NORMAL_WINDOW = 1.20
-    AXIS_SEGMENT1_FOLLOWUP_NORMAL_WINDOW = 1.00
-    AXIS_SWITCH_LOCK = 8.0
     AXIS_DODGE_PRE_SLEEP = 0.14
     AXIS_DODGE_POST_SLEEP = 0.12
-    AXIS_JUMP_AFTER_SLEEP = 0.01
-    AXIS_JUMP_POST_SLEEP = 0.05
-    AXIS_SKILL_POST_SLEEP = 0.20
-    AXIS_LIBERATION_POST_SLEEP = 0.0
-    AXIS_ECHO_POST_SLEEP = 0.0
+    AXIS_JUMP_POST_SLEEP = 0.14
+    AXIS_SKILL_POST_SLEEP = 0.22
+    AXIS_ECHO_POST_SLEEP = 0.16
+    # Video timing for phase 6: after the jump, keep Verina on field long
+    # enough for both final A inputs to enter their actions before hand-off.
+    AXIS_PHASE6_AA_WINDOW = 0.80
+    AXIS_PHASE6_SECOND_A_DELAY = 0.30
     AXIS_INTRO_TIMEOUT = 1.2
-    AXIS_INTRO_LOCK = 0.90              # provisional; replace after frame audit
+    AXIS_INTRO_LOCK = 0.90              # BaseChar/reference-package intro floor
     AXIS_INTRO_POST_SLEEP = 0.16
     AXIS_ACTION_RETRY_SLEEP = 0.10
-    AXIS_ACTION_WAIT_TIMEOUT = 3.0
+    # The reference loop moves on within roughly one second when R is not
+    # available; avoid holding the character in phase 13 for a full retry
+    # window and appearing idle at the end of a run.
+    AXIS_ACTION_WAIT_TIMEOUT = 1.0
 
     _AXIS_TEAM = {'char_douling', 'char_phrolova', 'char_verina'}
     _AXIS_PHASE_ACTOR = {
@@ -55,24 +57,22 @@ class Douling(BaseChar):
         14: 'char_phrolova',
     }
     _AXIS_NEXT = {
-        0: (1, 'char_verina', False),
-        3: (4, 'char_phrolova', True),
-        5: (6, 'char_verina', False),
-        9: (10, 'char_verina', False),
-        11: (12, 'char_phrolova', True),
+        1: (2, 'char_phrolova', False),
+        6: (7, 'char_phrolova', True),
+        8: (9, 'char_douling', False),
+        10: (11, 'char_douling', False),
+        13: (14, 'char_phrolova', True),
     }
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self._segment = 1
+        self.last_heavy = -1
 
     def do_perform(self):
         if self._axis_enabled():
             return self._do_axis_perform()
-        if self._segment == 1:
-            self._do_segment1()
-        else:
-            self._do_segment2()
+        self.perform_combat()
+        self.switch_next_char()
 
     def _axis_enabled(self):
         chars = getattr(self.task, 'chars', ()) if self.task is not None else ()
@@ -218,39 +218,68 @@ class Douling(BaseChar):
         if remaining > 0:
             self.sleep(remaining, check_combat=False)
 
-    def _axis_normal(self, count=1, interval=None, cast_time=None):
+    def _axis_normal(self, count=1, interval=None):
         if interval is None:
             interval = self.AXIS_NORMAL_INTERVAL
-        if cast_time is None:
-            cast_time = self.AXIS_NORMAL_CAST_TIME
         for _ in range(count):
             started_at = time.perf_counter()
             self.check_combat()
             self.click()
             self.task.next_frame()
-            self._axis_wait_cast(started_at, max(interval, cast_time))
+            self._axis_wait_cast(started_at, max(interval, self.AXIS_NORMAL_CAST_TIME))
+        return True
+
+    def _axis_phase6_two_normal(self):
+        """Send phase-6 AA with a real second-input window before switching."""
+        started_at = time.perf_counter()
+        self.check_combat()
+        self.click()
+        self.task.next_frame()
+        delay = self.AXIS_PHASE6_SECOND_A_DELAY - (time.perf_counter() - started_at)
+        if delay > 0:
+            self.sleep(delay, check_combat=False)
+        self.check_combat()
+        self.click()
+        self.task.next_frame()
+        remaining = self.AXIS_PHASE6_AA_WINDOW - (time.perf_counter() - started_at)
+        if remaining > 0:
+            self.sleep(remaining, check_combat=False)
         return True
 
     def _axis_jump(self):
         started_at = time.perf_counter()
-        self.task.jump(after_sleep=self.AXIS_JUMP_AFTER_SLEEP)
+        self.task.jump(after_sleep=0.01)
         self.task.next_frame()
-        self._axis_wait_cast(
-            started_at,
-            self.AXIS_JUMP_AFTER_SLEEP + self.AXIS_JUMP_POST_SLEEP,
-        )
+        self._axis_wait_cast(started_at, self.AXIS_JUMP_POST_SLEEP)
         return True
 
-    def _axis_heavy(self, duration=None):
-        if duration is None:
-            duration = self.AXIS_HEAVY_CAST_TIME
-        if self.flying():
-            self.wait_down()
-        completed = self._heavy_attack_hold(duration)
-        if not completed:
-            self.logger.warning(
-                f'dpv axis heavy interrupted phase={self._axis_state().get("phase")}')
-        return completed
+    def _axis_dodge(self):
+        self.sleep(self.AXIS_DODGE_PRE_SLEEP)
+        self.task.next_frame()
+        self.task.click(key='right')
+        self.sleep(self.AXIS_DODGE_POST_SLEEP)
+        return True
+
+    def _axis_resonance(self):
+        if not self.resonance_available():
+            return False
+        clicked = self.click_resonance(
+            send_click=False,
+            time_out=0,
+            post_sleep=self.AXIS_SKILL_POST_SLEEP,
+        )[0]
+        if clicked:
+            self.task.next_frame()
+        return clicked
+
+    def _axis_liberation(self):
+        if not self.liberation_available():
+            return False
+        clicked = self.click_liberation(wait_if_cd_ready=0)
+        if clicked:
+            self.task.next_frame()
+            self.sleep(self.AXIS_SKILL_POST_SLEEP)
+        return clicked
 
     def _axis_echo(self):
         if not self.echo_available():
@@ -263,137 +292,83 @@ class Douling(BaseChar):
             self.sleep(self.AXIS_ECHO_POST_SLEEP, check_combat=False)
         return clicked
 
-    def _axis_resonance(self):
-        if not self.resonance_available():
-            return False
-        started_at = time.perf_counter()
-        clicked = self.click_resonance(
-            send_click=False,
-            time_out=0,
-            post_sleep=self.AXIS_SKILL_POST_SLEEP,
-        )[0]
-        if clicked:
-            self.task.next_frame()
-            self._axis_wait_cast(started_at, self.AXIS_SKILL_CAST_TIME)
-        return clicked
-
-    def _axis_liberation(self):
-        if not self.liberation_available():
-            return False
-        started_at = time.perf_counter()
-        clicked = self.click_liberation(wait_if_cd_ready=0)
-        if clicked:
-            self.task.next_frame()
-            self._axis_wait_cast(started_at, self.AXIS_LIBERATION_CAST_TIME)
-            self.sleep(self.AXIS_LIBERATION_POST_SLEEP, check_combat=False)
-        return clicked
+    def _axis_verina_c2(self):
+        char_config = getattr(self.task, 'char_config', {})
+        return bool(char_config.get('Verina C2', False))
 
     def _do_axis_perform(self):
         phase = self._axis_sync_phase()
         if self._axis_route_to_actor(phase):
             return
         self._axis_start_phase()
-        if phase == 0:  # Startup: Buling aa
-            actions = (lambda: self._axis_normal(2),)
-        elif phase == 3:  # Startup: Buling e a z jump a z r
-            actions = (self._axis_resonance, self._axis_normal,
-                       self._axis_heavy, self._axis_jump,
-                       lambda: self._axis_normal(
-                           interval=self.AXIS_AERIAL_NORMAL_INTERVAL,
-                           cast_time=self.AXIS_AERIAL_NORMAL_CAST_TIME,
-                       ),
-                        self._axis_heavy, self._axis_liberation)
-        elif phase == 5:  # Startup: Buling aa q
-            actions = (lambda: self._axis_normal(2), self._axis_echo)
-        elif phase == 9:  # Loop: Buling e a jump a z z
-            actions = (self._axis_resonance, self._axis_normal,
-                       self._axis_jump,
-                       lambda: self._axis_normal(
-                           count=2,
-                           interval=self.AXIS_AERIAL_NORMAL_INTERVAL,
-                           cast_time=self.AXIS_AERIAL_NORMAL_CAST_TIME,
-                       ),
-                       self._axis_heavy, self._axis_heavy)
-        elif phase == 11:  # Loop: Buling aa q r
-            actions = (lambda: self._axis_normal(2),
-                       self._axis_echo, self._axis_liberation)
+        if phase == 1:  # Startup: Verina e
+            actions = (self._axis_resonance,)
+        elif phase == 6:  # Startup: Verina e q dodge r jump aa
+            actions = (self._axis_resonance, self._axis_echo,
+                       self._axis_dodge, self._axis_liberation, self._axis_jump,
+                       self._axis_phase6_two_normal)
+        elif phase == 8:  # Loop entry: Verina -> Buling
+            actions = ()
+        elif phase == 10:  # Loop: Verina e q
+            actions = (self._axis_resonance, self._axis_echo)
+        elif phase == 13:  # Loop: Verina r jump aa
+            actions = []
+            if not self._axis_verina_c2():
+                actions.append(self._axis_liberation)
+            actions.extend((self._axis_jump, lambda: self._axis_normal(2)))
+            actions = tuple(actions)
         else:
             actions = ()
         if self._axis_run_actions(actions):
             self._axis_advance(phase)
 
-    def _do_segment1(self):
-        self._normal_attack_cycle(self.AXIS_SEGMENT1_NORMAL_WINDOW)
-        if self.flying():
-            self.wait_down()
-        self.check_combat()
-        clicked = self.click_resonance(send_click=True, time_out=0.5)[0]
-        if not clicked:
-            self._finish_and_reset()
+    def perform_combat(self):
+        """3A -> 大招 -> E -> 声骸 -> (重击) -> 跳跃 -> 2A; 协奏满/超时则提前结束去切人。"""
+        self.start = time.time()
+
+        self.continues_normal_attack(self.NORMAL_ATTACK_TIME)
+
+        for cast_skill in (self.cast_liberation, self.cast_resonance, self.cast_echo):
+            if self.should_stop():
+                return
+            cast_skill()
+
+        if self.should_stop():
             return
-        self.sleep(self.AXIS_SKILL_POST_SLEEP)
-        if self.flying():
-            self.wait_down()
-        self.check_combat()
-        self._normal_attack_cycle(self.AXIS_SEGMENT1_FOLLOWUP_NORMAL_WINDOW)
-        self._segment = 2
-        self.switch_next_char()
 
-    def _do_segment2(self):
-        self.check_combat()
-        self.task.jump(after_sleep=self.AXIS_JUMP_AFTER_SLEEP)
-        self.sleep(self.AXIS_JUMP_POST_SLEEP)
-        self.check_combat()
-        if self.flying():
-            self.click()
-            self.sleep(self.AXIS_AERIAL_NORMAL_POST_SLEEP)
-        else:
-            self.wait_down()
-        self.check_combat()
-        self._heavy_attack_hold(self.AXIS_HEAVY_CAST_TIME)
-        self.click_echo(time_out=0)
-        self.click_liberation()
-        self._segment = 1
-        self.switch_next_char()
+        self.task.wait_until(lambda: self.task.in_team()[0], time_out=2.0)
+        self.sleep(self.RECOVER_TIME)
 
-    def _finish_and_reset(self):
-        self.click_echo(time_out=0)
-        self.click_liberation()
-        self._segment = 1
-        self.switch_next_char()
+        if self.is_mouse_forte_full() and self.can_heavy_attack():
+            self.heavy_attack(self.HEAVY_ATTACK_TIME)
+            self.last_heavy = time.time()
+        self.task.jump(after_sleep=0.01)
+        self.continues_normal_attack(self.JUMP_ATTACK_TIME)
 
-    def _normal_attack_cycle(self, duration):
-        start = time.time()
-        while time.time() - start < duration:
-            self.cycle_start()
-            if self.flying():
-                self.wait_down()
-                break
-            self.click()
-            self.cycle_sleep()
+    def cast_resonance(self):
+        if self.resonance_available():
+            self.click_resonance(send_click=True, time_out=0)
 
-    def _heavy_attack_hold(self, duration):
-        retries = 3
-        for _ in range(retries):
-            self.check_combat()
-            self.task.mouse_down()
-            start = time.time()
-            interrupted = False
-            while time.time() - start < duration:
-                if self.flying():
-                    interrupted = True
-                    break
-                self.sleep(0.1)
-            self.task.mouse_up()
-            self.sleep(0.01)
-            if not interrupted:
-                return True
-            self.wait_down()
-        return False
+    def cast_liberation(self):
+        if self.liberation_available():
+            self.click_liberation()
+
+    def cast_echo(self):
+        if self.echo_available():
+            self.click_echo(time_out=0)
+
+    def should_stop(self):
+        return self.is_con_full() or self.field_time_out()
+
+    def can_heavy_attack(self):
+        return self.time_elapsed_accounting_for_freeze(self.last_heavy) >= self.HEAVY_ATTACK_INTERVAL
+
+    def field_time_out(self):
+        return self.time_elapsed_accounting_for_freeze(self.start) >= self.FIELD_TIME
 
     def reset_state(self):
         super().reset_state()
-        self._segment = 1
+        self.last_heavy = -1
 
     def on_combat_end(self, chars):
         if self.task is not None:
@@ -409,6 +384,6 @@ class Douling(BaseChar):
             target = self._axis_state().get('target')
             if target:
                 return SwitchPriority.MUST if self.char_name == target else SwitchPriority.NO
-        if self.time_elapsed_accounting_for_freeze(self.last_perform) < self.AXIS_SWITCH_LOCK:
-            return SwitchPriority.NO
-        return SwitchPriority.NORMAL
+        if has_intro and current_char and current_char.char_name in {'char_hiyuki'}:
+            return SwitchPriority.MUST
+        return super().get_switch_priority(current_char, has_intro, target_low_con)

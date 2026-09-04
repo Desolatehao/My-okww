@@ -151,11 +151,13 @@ The snapshot has passed:
 
 Full project tests were not run in the original environment because `pytest` was unavailable and the system Python lacked the project's `cv2` dependency.
 
-## Manual Test Result (2026-09-03)
+## Manual Test Result (2026-09-04)
 
-The current snapshot was manually verified in OKWW with the exact Buling/Phrolova/Verina team:
+The current snapshot was manually verified in OKWW with the exact Buling/Phrolova/Verina team. The latest checks confirmed:
 
-- Startup prefix `Buling aa -> Verina E -> Phrolova aa Q A` executed correctly; Q triggered the echo and the following enhanced basic attack was accepted.
+- Phase 0 Buling `AA` now sends the second input after a real input window and holds the actor for about `0.60s` before switching, so both attacks can enter their actions and produce the expected Forte state.
+- Phase 3 Buling now follows `E -> 4A -> jump -> aerial A -> Z -> Z -> R`; the observed Forte order before Z is `Gen, Zhen, Zhen, Zhen`, both Z actions trigger, and R no longer interrupts the second Z.
+- Phase 6 Verina's final `AA` uses a delayed second input and a `0.80s` hand-off window; both attacks complete before switching to Phrolova.
 - Phrolova's scripted R completed and the axis immediately handed off to the next character without the previous multi-second target-search pause.
 
 ## Troubleshooting History
