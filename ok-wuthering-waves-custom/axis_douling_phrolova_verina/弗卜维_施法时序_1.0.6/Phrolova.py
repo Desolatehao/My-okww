@@ -21,6 +21,13 @@ class Phrolova(BaseChar):
     # 3A sections need a slightly longer settle before the next dodge.
     AXIS_DODGE_ENHANCED_CAST_TIME = 0.25
     AXIS_CHAIN_DODGE_ENHANCED_CAST_TIME = 0.55
+    # Phase 2 video: Q is followed by the first enhanced A after roughly
+    # 0.9s; each enhanced A remains on field for about 0.55s before the next
+    # distinct input is accepted. The final Z input is handed off while its
+    # animation continues, so only a short hold is needed here.
+    AXIS_PHASE2_Q_TO_A_DELAY = 0.90
+    AXIS_PHASE2_ENHANCED_CAST_TIME = 0.55
+    AXIS_PHASE2_HEAVY_DURATION = 0.25
     AXIS_SKILL_CAST_TIME = 0.53                  # E derive point
     AXIS_LIBERATION_CAST_TIME = 3.30             # Q animation fallback
     AXIS_ECHO_CAST_TIME = 0.0                    # R is a hand-off echo
@@ -366,6 +373,27 @@ class Phrolova(BaseChar):
             self.sleep(0.04, check_combat=False)
         return clicked
 
+    def _axis_phase2_echo_queue_next(self):
+        """Queue phase-2 A after the observed Q animation settle window."""
+        if not self.echo_available():
+            return False
+        clicked = self.click_echo(time_out=0)
+        if clicked:
+            self.task.next_frame()
+            self.sleep(self.AXIS_PHASE2_Q_TO_A_DELAY, check_combat=False)
+        return clicked
+
+    def _axis_phase2_enhanced(self):
+        started_at = time.perf_counter()
+        self.click()
+        self.task.next_frame()
+        self._axis_wait_cast(started_at, self.AXIS_PHASE2_ENHANCED_CAST_TIME)
+        self._axis_attack_index = 0
+        return True
+
+    def _axis_phase2_heavy(self):
+        return self._axis_heavy(self.AXIS_PHASE2_HEAVY_DURATION)
+
     def _do_axis_perform(self):
         self.last_liberation = -1
         phase = self._axis_sync_phase()
@@ -374,9 +402,9 @@ class Phrolova(BaseChar):
         self._axis_start_phase()
         if phase == 2:  # Startup: Phrolova aa q A e A z
             actions = (
-                lambda: self._axis_normal(2), self._axis_echo_queue_next,
-                self._axis_enhanced_followup, self._axis_resonance,
-                self._axis_enhanced_followup, self._axis_heavy,
+                lambda: self._axis_normal(2), self._axis_phase2_echo_queue_next,
+                self._axis_phase2_enhanced, self._axis_resonance,
+                self._axis_phase2_enhanced, self._axis_phase2_heavy,
             )
         elif phase == 4:  # Startup: Phrolova a dodge A r
             actions = (self._axis_normal, self._axis_dodge_enhanced,

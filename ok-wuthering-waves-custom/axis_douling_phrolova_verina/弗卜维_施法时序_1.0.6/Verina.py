@@ -25,6 +25,10 @@ class Verina(BaseChar):
     AXIS_JUMP_POST_SLEEP = 0.14
     AXIS_SKILL_POST_SLEEP = 0.22
     AXIS_ECHO_POST_SLEEP = 0.16
+    # Video timing for phase 6: after the jump, keep Verina on field long
+    # enough for both final A inputs to enter their actions before hand-off.
+    AXIS_PHASE6_AA_WINDOW = 0.80
+    AXIS_PHASE6_SECOND_A_DELAY = 0.30
     AXIS_INTRO_TIMEOUT = 1.2
     AXIS_INTRO_LOCK = 0.90              # BaseChar/reference-package intro floor
     AXIS_INTRO_POST_SLEEP = 0.16
@@ -225,6 +229,23 @@ class Verina(BaseChar):
             self._axis_wait_cast(started_at, max(interval, self.AXIS_NORMAL_CAST_TIME))
         return True
 
+    def _axis_phase6_two_normal(self):
+        """Send phase-6 AA with a real second-input window before switching."""
+        started_at = time.perf_counter()
+        self.check_combat()
+        self.click()
+        self.task.next_frame()
+        delay = self.AXIS_PHASE6_SECOND_A_DELAY - (time.perf_counter() - started_at)
+        if delay > 0:
+            self.sleep(delay, check_combat=False)
+        self.check_combat()
+        self.click()
+        self.task.next_frame()
+        remaining = self.AXIS_PHASE6_AA_WINDOW - (time.perf_counter() - started_at)
+        if remaining > 0:
+            self.sleep(remaining, check_combat=False)
+        return True
+
     def _axis_jump(self):
         started_at = time.perf_counter()
         self.task.jump(after_sleep=0.01)
@@ -285,7 +306,7 @@ class Verina(BaseChar):
         elif phase == 6:  # Startup: Verina e q dodge r jump aa
             actions = (self._axis_resonance, self._axis_echo,
                        self._axis_dodge, self._axis_liberation, self._axis_jump,
-                       lambda: self._axis_normal(2))
+                       self._axis_phase6_two_normal)
         elif phase == 8:  # Loop entry: Verina -> Buling
             actions = ()
         elif phase == 10:  # Loop: Verina e q
