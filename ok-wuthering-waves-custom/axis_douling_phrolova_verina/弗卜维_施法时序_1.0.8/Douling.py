@@ -36,8 +36,8 @@ class Douling(BaseChar):
     AXIS_STARTUP_SECOND_A_DELAY = 0.30  # phase 0：第一次 A 后发送第二次 A 的延迟。
     # Phase 5: the variation intro consumes most of the switch-to-Q window;
     # keep only two accepted A opportunities before sending the echo.
-    AXIS_PHASE5_AA_DURATION = 0.60  # phase 5：变奏衔接后的 A 总窗口，结束后释放声骸。
-    AXIS_PHASE5_AA_INTERVAL = 0.30  # phase 5：两次 A 输入之间的间隔，避免误触第三次 A。
+    AXIS_PHASE5_AA_DURATION = 0.70  # phase 5：变奏衔接后的 A 总窗口，结束后释放声骸。
+    AXIS_PHASE5_AA_INTERVAL = 0.15  # phase 5：两次 A 输入之间的间隔，保持实战确认的输入节奏。
     AXIS_SWITCH_LOCK = 8.0  # 非专属队伍：角色出场后保持普通切人优先级的时间。
     AXIS_DODGE_PRE_SLEEP = 0.14  # 预留给闪避输入前的状态稳定时间。
     AXIS_DODGE_POST_SLEEP = 0.12  # 闪避输入后的最短衔接等待。
