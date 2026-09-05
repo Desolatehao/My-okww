@@ -25,7 +25,7 @@
 - 窗口内平 A 输入间隔：`0.15 s`。
 - 已确认第三次平 A 能触发强化 A 图标，再由闪避打断并释放强化 A。
 - 尾段 Q 后强化 A 等待：`0.10 s`。
-- 尾段 Z 后 R 延迟：`1.50 s`；此前 `0.30 s` 无法触发 R，`1.50 s` 已实机确认可用。
+- 尾段 Z 后 R 延迟：`1.60 s`；此前 `0.30 s` 无法触发 R，`1.60 s` 已实机确认可用。
 
 ## 当前关键参数
 
@@ -37,7 +37,7 @@ AXIS_PHASE2_HEAVY_DURATION = 0.3
 AXIS_PHASE7_THREE_A_DURATION = 1.70
 AXIS_PHASE7_THREE_A_INTERVAL = 0.15
 AXIS_PHASE7_Q_TO_A_CAST_TIME = 0.10
-AXIS_PHASE7_Z_TO_R_DELAY = 1.50
+AXIS_PHASE7_Z_TO_R_DELAY = 1.60
 
 # Douling.py
 AXIS_PHASE5_AA_DURATION = 2.05
