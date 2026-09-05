@@ -34,7 +34,7 @@ class Phrolova(BaseChar):
     AXIS_PHASE7_THREE_A_DURATION = 1.70  # phase 7/14：一段 3A 连续输入的总窗口。
     AXIS_PHASE7_THREE_A_INTERVAL = 0.15  # phase 7/14：3A 窗口内每次普通 A 的输入间隔。
     AXIS_PHASE7_Q_TO_A_CAST_TIME = 0.10  # phase 7/14：声骸后接强化 A 的短等待。
-    AXIS_PHASE7_Z_TO_R_DELAY = 1.60  # phase 7/14：Z 完成后到共鸣解放的实机衔接等待。
+    AXIS_PHASE7_Z_TO_R_DELAY = 1.70  # phase 7/14：Z 完成后到共鸣解放的实机衔接等待。
     AXIS_SKILL_CAST_TIME = 0.53  # phase 7、12、14：E 的派生动作窗口。
     AXIS_LIBERATION_CAST_TIME = 3.30  # phase 4、7、14：共鸣解放的动画兜底等待。
     AXIS_ECHO_CAST_TIME = 0.0  # phase 2、7、14：声骸为脱手动作。
