@@ -46,13 +46,13 @@
 ```text
 启动:
 卜 aa -> 维 e -> 弗 aa Q A e A z -> 卜 e 4a 跳 a z z r
--> 弗 a 闪 A r -> 卜 aa Q -> 维 e Q 闪 r 跳 aa
+-> 弗 a 闪 A r -> 卜 aa Q -> 维 e Q 闪 跳 aa
 -> 弗 a 闪 A e A 闪 (3a 闪 A 闪) (3a 闪 A 闪) (3a 闪 A 闪) 3a Q A z r
 -> 维
 
 循环:
 维 -> 卜 e a 跳 a z z -> 维 e Q -> 卜 aa Q r
--> 弗 a 闪 A e A -> 维 r 跳 aa
+-> 弗 a 闪 A e A -> 维 跳 aa
 -> 弗 a 闪 A (3a 闪 A 闪) (3a 闪 A 闪) 3a Q A e A z r
 -> 维
 ```
@@ -96,4 +96,4 @@
 
 - 三名角色都只需要一阶奇幻变奏即可进入这条轴。
 - 弗洛洛按 0 链流程记录；动作窗口本身不依赖额外命座。
-- 维里奈 0 链按阶段 13 释放 R；维里奈 2 链时将 `config.py` 的 `Verina C2` 设为 `True`，循环阶段 13 自动跳过 R。
+- 当前四链维里奈在 phase 6 和 phase 13 均跳过 R，分别直接执行 `E -> Q -> 闪 -> 跳 -> AA` 与 `跳 -> AA`。

@@ -300,33 +300,24 @@ class Verina(BaseChar):
             self.sleep(self.AXIS_ECHO_POST_SLEEP, check_combat=False)
         return clicked
 
-    def _axis_verina_c2(self):
-        # phase 13：读取配置，C2 时跳过本阶段的 R 声骸动作。
-        char_config = getattr(self.task, 'char_config', {})
-        return bool(char_config.get('Verina C2', False))
-
     def _do_axis_perform(self):
-        # 专属轴入口：按照 phase 表执行维里奈的 E/Q/R、跳跃和普攻动作。
+        # 专属轴入口：按照 phase 表执行维里奈的 E/Q、跳跃和普攻动作。
         phase = self._axis_sync_phase()
         if self._axis_route_to_actor(phase):
             return
         self._axis_start_phase()
         if phase == 1:  # phase 1 启动：E。
             actions = (self._axis_resonance,)
-        elif phase == 6:  # phase 6 启动：E -> 声骸 -> 闪 -> 共鸣解放 -> 跳 -> AA。
+        elif phase == 6:  # phase 6 启动：E -> 声骸 -> 闪 -> 跳 -> AA；四链不释放 R。
             actions = (self._axis_resonance, self._axis_echo,
-                       self._axis_dodge, self._axis_liberation, self._axis_jump,
+                       self._axis_dodge, self._axis_jump,
                        self._axis_phase6_two_normal)
         elif phase == 8:  # phase 8 循环入口：维里奈不攻击，直接切卜灵。
             actions = ()
         elif phase == 10:  # phase 10 循环：E -> 声骸。
             actions = (self._axis_resonance, self._axis_echo)
-        elif phase == 13:  # phase 13 循环：非 C2 时释放共鸣解放；随后跳 -> AA。
-            actions = []
-            if not self._axis_verina_c2():
-                actions.append(self._axis_liberation)
-            actions.extend((self._axis_jump, lambda: self._axis_normal(2)))
-            actions = tuple(actions)
+        elif phase == 13:  # phase 13 循环：四链不释放 R，直接跳 -> AA。
+            actions = (self._axis_jump, lambda: self._axis_normal(2))
         else:
             actions = ()
         if self._axis_run_actions(actions):
