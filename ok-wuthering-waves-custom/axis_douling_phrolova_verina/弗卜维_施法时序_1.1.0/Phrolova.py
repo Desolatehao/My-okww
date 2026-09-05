@@ -32,9 +32,10 @@ class Phrolova(BaseChar):
     # Phase 7 video: one 3A segment lasts about 1.26s. During that window,
     # send a normal-A input every 0.15s; only the total duration is tuned.
     AXIS_PHASE7_THREE_A_DURATION = 1.70  # phase 7/14：一段 3A 连续输入的总窗口。
-    AXIS_PHASE7_THREE_A_INTERVAL = 0.15  # phase 7/14：3A 窗口内每次普通 A 的输入间隔。
+    AXIS_PHASE7_THREE_A_INTERVAL = 0.10  # phase 7：3A 窗口内每次普通 A 的输入间隔。
+    AXIS_PHASE7_ECHO_POST_SLEEP = 1.00  # phase 7：Q 动画结束后的强化 A 衔接等待。
     AXIS_PHASE7_Q_TO_A_CAST_TIME = 0.10  # phase 7/14：声骸后接强化 A 的短等待。
-    AXIS_PHASE7_Z_TO_R_DELAY = 1.70  # phase 7/14：Z 完成后到共鸣解放的实机衔接等待。
+    AXIS_PHASE7_Z_TO_R_DELAY = 1.75  # phase 7/14：Z 完成后到共鸣解放的实机衔接等待。
     AXIS_SKILL_CAST_TIME = 0.53  # phase 7、12、14：E 的派生动作窗口。
     AXIS_LIBERATION_CAST_TIME = 3.30  # phase 4、7、14：共鸣解放的动画兜底等待。
     AXIS_ECHO_CAST_TIME = 0.0  # phase 2、7、14：声骸为脱手动作。
@@ -399,7 +400,7 @@ class Phrolova(BaseChar):
         self.sleep(self.AXIS_SKILL_POST_SLEEP, check_combat=False)
         return True
 
-    def _axis_echo(self):
+    def _axis_echo(self, post_sleep=None):
         if not self.echo_available():
             return False
         started_at = time.perf_counter()
@@ -407,7 +408,9 @@ class Phrolova(BaseChar):
         if clicked:
             self.task.next_frame()
             self._axis_wait_cast(started_at, self.AXIS_ECHO_CAST_TIME)
-            self.sleep(self.AXIS_ECHO_POST_SLEEP, check_combat=False)
+            if post_sleep is None:
+                post_sleep = self.AXIS_ECHO_POST_SLEEP
+            self.sleep(post_sleep, check_combat=False)
         return clicked
 
     def _axis_echo_queue_next(self):
@@ -468,7 +471,7 @@ class Phrolova(BaseChar):
                 self._axis_phase7_three_normal_dodge, self._axis_phase7_three_normal_dodge,
                 self._axis_phase7_three_normal_dodge,
                 self._axis_phase7_three_normal,
-                self._axis_echo, self._axis_phase7_enhanced,
+                lambda: self._axis_echo(self.AXIS_PHASE7_ECHO_POST_SLEEP), self._axis_phase7_enhanced,
                 self._axis_heavy, self._axis_phase7_liberation,
             )
         elif phase == 12:  # phase 12 循环：A -> 闪 -> 强化 A -> E -> 强化 A。

@@ -38,6 +38,7 @@ class Douling(BaseChar):
     # keep only two accepted A opportunities before sending the echo.
     AXIS_PHASE5_AA_DURATION = 0.70  # phase 5：变奏衔接后的 A 总窗口，结束后释放声骸。
     AXIS_PHASE5_AA_INTERVAL = 0.15  # phase 5：两次 A 输入之间的间隔，保持实战确认的输入节奏。
+    AXIS_PHASE5_ECHO_DOWN_TIME = 0.05  # phase 5：声骸按键保持时长。
     AXIS_SWITCH_LOCK = 8.0  # 非专属队伍：角色出场后保持普通切人优先级的时间。
     AXIS_DODGE_PRE_SLEEP = 0.14  # 预留给闪避输入前的状态稳定时间。
     AXIS_DODGE_POST_SLEEP = 0.12  # 闪避输入后的最短衔接等待。
@@ -326,6 +327,16 @@ class Douling(BaseChar):
             self.sleep(self.AXIS_ECHO_POST_SLEEP, check_combat=False)
         return clicked
 
+    def _axis_phase5_echo(self):
+        """Send phase-5 echo with the axis-specific key hold time."""
+        if not self.echo_available():
+            return False
+        self.send_echo_key(down_time=self.AXIS_PHASE5_ECHO_DOWN_TIME)
+        self.record_echo_use()
+        self.task.next_frame()
+        self.sleep(self.AXIS_ECHO_POST_SLEEP, check_combat=False)
+        return True
+
     def _axis_resonance(self):
         if not self.resonance_available():
             return False
@@ -374,7 +385,7 @@ class Douling(BaseChar):
                 self._axis_liberation,
             )
         elif phase == 5:  # phase 5 启动：持续 A -> 声骸。
-            actions = (self._axis_phase5_aa_window, self._axis_echo)
+            actions = (self._axis_phase5_aa_window, self._axis_phase5_echo)
         elif phase == 9:  # phase 9 循环：E -> A -> 跳 -> 空中 2A -> Z -> 4A -> Z。
             actions = (self._axis_resonance, self._axis_normal,
                        self._axis_jump,
