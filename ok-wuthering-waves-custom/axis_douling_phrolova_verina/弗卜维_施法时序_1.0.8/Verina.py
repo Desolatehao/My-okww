@@ -6,6 +6,7 @@ from src.char.BaseChar import BaseChar, SwitchPriority
 class Verina(BaseChar):
     """Verina rotation with a dedicated Phrolova/Buling team axis."""
 
+    # 基础角色参数用于默认逻辑；AXIS_* 参数用于弗卜维专属 phase，单位为秒。
     ATTACK_INTERVAL: float = 0.1
     NORMAL_ATTACK_TIME: float = 0.6
     JUMP_ATTACK_TIME: float = 0.5
@@ -17,27 +18,28 @@ class Verina(BaseChar):
     # The reference Verina configuration uses a 0.1s attack cadence.  Skill
     # and liberation helpers already wait for their UI state; these minimums
     # only cover the short input tail before the next phase action.
-    AXIS_NORMAL_INTERVAL = ATTACK_INTERVAL
-    AXIS_NORMAL_CAST_TIME = ATTACK_INTERVAL
-    AXIS_ECHO_CAST_TIME = 0.0
-    AXIS_DODGE_PRE_SLEEP = 0.14
-    AXIS_DODGE_POST_SLEEP = 0.12
-    AXIS_JUMP_POST_SLEEP = 0.14
-    AXIS_SKILL_POST_SLEEP = 0.22
-    AXIS_ECHO_POST_SLEEP = 0.16
+    AXIS_NORMAL_INTERVAL = ATTACK_INTERVAL  # 通用/phase 13：普通攻击输入间隔。
+    AXIS_NORMAL_CAST_TIME = ATTACK_INTERVAL  # 通用/phase 13：普通攻击最短动作窗口。
+    AXIS_ECHO_CAST_TIME = 0.0  # phase 6、10、13：声骸为脱手动作。
+    AXIS_DODGE_PRE_SLEEP = 0.14  # phase 6：闪避输入前的状态稳定等待。
+    AXIS_DODGE_POST_SLEEP = 0.12  # phase 6：闪避输入后的衔接等待。
+    AXIS_JUMP_POST_SLEEP = 0.14  # phase 6、13：跳跃后到下一动作的等待。
+    AXIS_SKILL_POST_SLEEP = 0.22  # phase 1、6、10：E 后的显式尾部缓冲。
+    AXIS_ECHO_POST_SLEEP = 0.16  # phase 6、10、13：声骸后的脱手尾部缓冲。
     # Video timing for phase 6: after the jump, keep Verina on field long
     # enough for both final A inputs to enter their actions before hand-off.
-    AXIS_PHASE6_AA_WINDOW = 0.80
-    AXIS_PHASE6_SECOND_A_DELAY = 0.30
-    AXIS_INTRO_TIMEOUT = 1.2
-    AXIS_INTRO_LOCK = 0.90              # BaseChar/reference-package intro floor
-    AXIS_INTRO_POST_SLEEP = 0.16
-    AXIS_ACTION_RETRY_SLEEP = 0.10
+    AXIS_PHASE6_AA_WINDOW = 0.80  # phase 6：跳跃后 AA 的总留场窗口。
+    AXIS_PHASE6_SECOND_A_DELAY = 0.30  # phase 6：跳跃后第一次 A 到第二次 A 的延迟。
+    AXIS_INTRO_TIMEOUT = 1.2  # 变奏入场检测最多等待时间。
+    AXIS_INTRO_LOCK = 0.90  # 变奏入场后动作锁定的安全窗口。
+    AXIS_INTRO_POST_SLEEP = 0.16  # 入场锁定结束后的额外缓冲。
+    AXIS_ACTION_RETRY_SLEEP = 0.10  # 动作暂不可用时的重试间隔。
     # The reference loop moves on within roughly one second when R is not
     # available; avoid holding the character in phase 13 for a full retry
     # window and appearing idle at the end of a run.
-    AXIS_ACTION_WAIT_TIMEOUT = 1.0
+    AXIS_ACTION_WAIT_TIMEOUT = 1.0  # 单个动作持续不可用时的最大等待。
 
+    # 只有精确检测到弗卜维三人队时才启用专属 phase 轴。
     _AXIS_TEAM = {'char_douling', 'char_phrolova', 'char_verina'}
     _AXIS_PHASE_ACTOR = {
         0: 'char_douling',
@@ -57,6 +59,7 @@ class Verina(BaseChar):
         14: 'char_phrolova',
     }
     _AXIS_NEXT = {
+        # phase: (下一 phase, 下一角色, 是否消耗变奏入场)
         1: (2, 'char_phrolova', False),
         6: (7, 'char_phrolova', True),
         8: (9, 'char_douling', False),
@@ -75,11 +78,13 @@ class Verina(BaseChar):
         self.switch_next_char()
 
     def _axis_enabled(self):
+        # 精确队伍门控，避免专属切人状态污染其它配队。
         chars = getattr(self.task, 'chars', ()) if self.task is not None else ()
         names = {getattr(char, 'char_name', None) for char in chars if char is not None}
         return names == self._AXIS_TEAM
 
     def _axis_state(self):
+        # 共享 task 状态记录当前 phase、动作 step、目标角色和入场等待状态。
         state = getattr(self.task, '_dpv_axis_state', None)
         if not isinstance(state, dict) or state.get('team') != self._AXIS_TEAM:
             state = {
@@ -117,6 +122,7 @@ class Verina(BaseChar):
         return True
 
     def _axis_switch_to(self, target_name, free_intro=False):
+        # 直接按槽位切人并确认结果，避免依赖战斗目标搜索。
         target = next(
             (char for char in getattr(self.task, 'chars', ())
              if char is not None and getattr(char, 'char_name', None) == target_name),
@@ -182,6 +188,7 @@ class Verina(BaseChar):
 
     def _axis_run_actions(self, actions):
         """Run a phase from its persistent action cursor."""
+        # 顺序执行当前 phase 动作；不可用动作在同一 step 重试，成功后才前进。
         state = self._axis_state()
         step = state['step']
         while step < len(actions):
@@ -231,6 +238,7 @@ class Verina(BaseChar):
 
     def _axis_phase6_two_normal(self):
         """Send phase-6 AA with a real second-input window before switching."""
+        # phase 6：跳跃后发送两次 A，并确保第二次 A 进入动作后再切弗洛洛。
         started_at = time.perf_counter()
         self.check_combat()
         self.click()
@@ -293,25 +301,27 @@ class Verina(BaseChar):
         return clicked
 
     def _axis_verina_c2(self):
+        # phase 13：读取配置，C2 时跳过本阶段的 R 声骸动作。
         char_config = getattr(self.task, 'char_config', {})
         return bool(char_config.get('Verina C2', False))
 
     def _do_axis_perform(self):
+        # 专属轴入口：按照 phase 表执行维里奈的 E/Q/R、跳跃和普攻动作。
         phase = self._axis_sync_phase()
         if self._axis_route_to_actor(phase):
             return
         self._axis_start_phase()
-        if phase == 1:  # Startup: Verina e
+        if phase == 1:  # phase 1 启动：E。
             actions = (self._axis_resonance,)
-        elif phase == 6:  # Startup: Verina e q dodge r jump aa
+        elif phase == 6:  # phase 6 启动：E -> 声骸 -> 闪 -> 共鸣解放 -> 跳 -> AA。
             actions = (self._axis_resonance, self._axis_echo,
                        self._axis_dodge, self._axis_liberation, self._axis_jump,
                        self._axis_phase6_two_normal)
-        elif phase == 8:  # Loop entry: Verina -> Buling
+        elif phase == 8:  # phase 8 循环入口：维里奈不攻击，直接切卜灵。
             actions = ()
-        elif phase == 10:  # Loop: Verina e q
+        elif phase == 10:  # phase 10 循环：E -> 声骸。
             actions = (self._axis_resonance, self._axis_echo)
-        elif phase == 13:  # Loop: Verina r jump aa
+        elif phase == 13:  # phase 13 循环：非 C2 时释放共鸣解放；随后跳 -> AA。
             actions = []
             if not self._axis_verina_c2():
                 actions.append(self._axis_liberation)
