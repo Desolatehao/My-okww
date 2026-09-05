@@ -6,54 +6,56 @@ from src.char.BaseChar import BaseChar, SwitchPriority
 class Phrolova(BaseChar):
     """Phrolova rotation with a dedicated Buling/Verina team axis."""
 
+    # 以下参数服务于弗洛洛专属轴；单位为秒，括号中的 phase 表示实际使用阶段。
     # The reference character script uses a 0.06s input cadence, but the
     # game does not accept the next distinct action until the current attack's
     # derive point. Keep both values explicit: the interval is a lower bound,
     # while the cast times below protect each action boundary.
-    AXIS_NORMAL_INTERVAL = 0.06
-    AXIS_NORMAL_CAST_TIMES = (0.67, 0.60, 0.53)  # A1/A2/A3 derive points
-    AXIS_ENHANCED_CAST_TIME = 1.33               # standalone enhanced basic attack
+    AXIS_NORMAL_INTERVAL = 0.06  # 通用/phase 2、4、7、12、14：普攻输入下限。
+    AXIS_NORMAL_CAST_TIMES = (0.67, 0.60, 0.53)  # 通用：A1/A2/A3 各自的可接动作窗口。
+    AXIS_ENHANCED_CAST_TIME = 1.33  # 通用：独立强化 A 的完整动作窗口。
     # In the reference video the enhanced A is queued during dodge and the
     # dodge cancels part of its startup/recovery. Keep this shorter window
     # separate from standalone enhanced attacks used outside dodge chains.
-    AXIS_DODGE_ENHANCED_DELAY = 0.04
+    AXIS_DODGE_ENHANCED_DELAY = 0.04  # phase 4、7、12、14：闪避期间预输入强化 A 的延迟。
     # 24 FPS reference: dodge -> enhanced A is about 6 frames.  Chained
     # 3A sections need a slightly longer settle before the next dodge.
-    AXIS_DODGE_ENHANCED_CAST_TIME = 0.25
-    AXIS_CHAIN_DODGE_ENHANCED_CAST_TIME = 0.55
+    AXIS_DODGE_ENHANCED_CAST_TIME = 0.25  # phase 4、12：普通闪避接强化 A 的窗口。
+    AXIS_CHAIN_DODGE_ENHANCED_CAST_TIME = 0.55  # phase 7、14：3A 链闪避接强化 A 的窗口。
     # Phase 2 video: Q is followed by the first enhanced A after roughly
     # 0.9s; each enhanced A remains on field for about 0.55s before the next
     # distinct input is accepted. The final Z input is handed off while its
     # animation continues, so only a short hold is needed here.
-    AXIS_PHASE2_Q_TO_A_DELAY = 0.90
-    AXIS_PHASE2_ENHANCED_CAST_TIME = 0.55
-    AXIS_PHASE2_HEAVY_DURATION = 0.3
+    AXIS_PHASE2_Q_TO_A_DELAY = 0.90  # phase 2：声骸后到第一发强化 A 的等待。
+    AXIS_PHASE2_ENHANCED_CAST_TIME = 0.55  # phase 2：两发强化 A 之间的动作窗口。
+    AXIS_PHASE2_HEAVY_DURATION = 0.3  # phase 2：Z 输入保持时间，之后立即切人。
     # Phase 7 video: one 3A segment lasts about 1.26s. During that window,
     # send a normal-A input every 0.15s; only the total duration is tuned.
-    AXIS_PHASE7_THREE_A_DURATION = 1.70
-    AXIS_PHASE7_THREE_A_INTERVAL = 0.15
-    AXIS_PHASE7_Q_TO_A_CAST_TIME = 0.10
-    AXIS_PHASE7_Z_TO_R_DELAY = 1.50
-    AXIS_SKILL_CAST_TIME = 0.53                  # E derive point
-    AXIS_LIBERATION_CAST_TIME = 3.30             # Q animation fallback
-    AXIS_ECHO_CAST_TIME = 0.0                    # R is a hand-off echo
-    AXIS_DODGE_PRE_SLEEP = 0.12
-    AXIS_DODGE_POST_SLEEP = 0.04
-    AXIS_JUMP_POST_SLEEP = 0.14
-    AXIS_SKILL_POST_SLEEP = 0.0
-    AXIS_ECHO_POST_SLEEP = 2.0
-    AXIS_INTRO_TIMEOUT = 1.2
-    AXIS_INTRO_LOCK = 1.30
-    AXIS_INTRO_POST_SLEEP = 0.16
-    AXIS_ACTION_RETRY_SLEEP = 0.10
+    AXIS_PHASE7_THREE_A_DURATION = 1.70  # phase 7/14：一段 3A 连续输入的总窗口。
+    AXIS_PHASE7_THREE_A_INTERVAL = 0.15  # phase 7/14：3A 窗口内每次普通 A 的输入间隔。
+    AXIS_PHASE7_Q_TO_A_CAST_TIME = 0.10  # phase 7/14：声骸后接强化 A 的短等待。
+    AXIS_PHASE7_Z_TO_R_DELAY = 1.60  # phase 7/14：Z 完成后到共鸣解放的实机衔接等待。
+    AXIS_SKILL_CAST_TIME = 0.53  # phase 7、12、14：E 的派生动作窗口。
+    AXIS_LIBERATION_CAST_TIME = 3.30  # phase 4、7、14：共鸣解放的动画兜底等待。
+    AXIS_ECHO_CAST_TIME = 0.0  # phase 2、7、14：声骸为脱手动作。
+    AXIS_DODGE_PRE_SLEEP = 0.12  # phase 4、7、12、14：闪避前置等待。
+    AXIS_DODGE_POST_SLEEP = 0.04  # phase 4、7、12、14：闪避后的短衔接等待。
+    AXIS_JUMP_POST_SLEEP = 0.14  # 跳跃后到下一输入的稳定等待。
+    AXIS_SKILL_POST_SLEEP = 0.0  # E helper 后不额外追加固定等待。
+    AXIS_ECHO_POST_SLEEP = 2.0  # 声骸后 HUD/动画恢复的保护等待。
+    AXIS_INTRO_TIMEOUT = 1.2  # 变奏入场检测最多等待时间。
+    AXIS_INTRO_LOCK = 1.30  # 变奏入场后动作锁定的安全窗口。
+    AXIS_INTRO_POST_SLEEP = 0.16  # 入场锁定结束后的额外缓冲。
+    AXIS_ACTION_RETRY_SLEEP = 0.10  # 动作暂不可用时的重试间隔。
     # UI availability checks can lag briefly after a character switch or
     # animation. Do not let one unavailable optional action deadlock the axis.
-    AXIS_ACTION_WAIT_TIMEOUT = 1.5
-    AXIS_LIBERATION_WAIT_TIMEOUT = 10.0
+    AXIS_ACTION_WAIT_TIMEOUT = 1.5  # 普通动作持续不可用时的最大等待。
+    AXIS_LIBERATION_WAIT_TIMEOUT = 10.0  # 共鸣解放可用性检查的最长等待上限。
     # In the reference capture Z runs from 00:00:42:02 to 00:00:43:10
     # (about 1.33s).  The previous 2.32s frame-data value delayed R too much.
-    AXIS_HEAVY_DURATION = 1.33
+    AXIS_HEAVY_DURATION = 1.33  # phase 7/14：强化重击 Z 的默认动作窗口。
 
+    # 专属轴的精确队伍门槛和 phase 执行角色映射。
     _AXIS_TEAM = {'char_douling', 'char_phrolova', 'char_verina'}
     _AXIS_PHASE_ACTOR = {
         0: 'char_douling',
@@ -73,6 +75,7 @@ class Phrolova(BaseChar):
         14: 'char_phrolova',
     }
     _AXIS_NEXT = {
+        # phase: (下一 phase, 下一角色, 是否消耗变奏入场)
         2: (3, 'char_douling', False),
         4: (5, 'char_douling', True),
         7: (8, 'char_verina', True),
@@ -96,11 +99,14 @@ class Phrolova(BaseChar):
         self._do_default_perform()
 
     def _axis_enabled(self):
+        # 仅精确匹配弗卜维三人队，其他队伍继续走默认弗洛洛逻辑。
         chars = getattr(self.task, 'chars', ()) if self.task is not None else ()
         names = {getattr(char, 'char_name', None) for char in chars if char is not None}
         return names == self._AXIS_TEAM
 
     def _axis_state(self):
+        # 共享 task 状态：phase/step 控制进度，target 控制切人，
+        # phase_started 和 step_wait_started 防止重复入场或无限重试。
         state = getattr(self.task, '_dpv_axis_state', None)
         if not isinstance(state, dict) or state.get('team') != self._AXIS_TEAM:
             state = {
@@ -138,6 +144,7 @@ class Phrolova(BaseChar):
         return True
 
     def _axis_switch_to(self, target_name, free_intro=False):
+        # 通过槽位切换并轮询确认，绕开战斗目标 HUD 暂时消失造成的切人阻塞。
         """Directly switch by slot, bypassing target search and switch chooser."""
         target = next(
             (char for char in getattr(self.task, 'chars', ())
@@ -215,6 +222,7 @@ class Phrolova(BaseChar):
         A failed skill/echo remains the current step, so a later combat-loop
         tick retries it without replaying already completed inputs.
         """
+        # 阶段动作按持久化游标执行；失败动作保留在原 step 等待下一次循环重试。
         state = self._axis_state()
         step = state['step']
         while step < len(actions):
@@ -257,6 +265,7 @@ class Phrolova(BaseChar):
             self.sleep(remaining, check_combat=False)
 
     def _axis_normal(self, count=1, interval=None, cast_times=None):
+        # 根据当前 A1/A2/A3 计数发送普通攻击，并使用对应派生时间保护动作边界。
         if interval is None:
             interval = self.AXIS_NORMAL_INTERVAL
         for _ in range(count):
@@ -281,6 +290,7 @@ class Phrolova(BaseChar):
         return True
 
     def _axis_dodge_enhanced(self, cast_time=None):
+        # 闪避期间预输入强化 A；普通链和 3A 链使用不同的动作窗口。
         """Dodge and queue enhanced A before the dodge animation ends."""
         if cast_time is None:
             cast_time = self.AXIS_DODGE_ENHANCED_CAST_TIME
@@ -311,6 +321,7 @@ class Phrolova(BaseChar):
         return True
 
     def _axis_phase7_three_normal(self):
+        # phase 7/14：在固定总窗口内按间隔连续发送三次平 A。
         started_at = time.perf_counter()
         while time.perf_counter() - started_at < self.AXIS_PHASE7_THREE_A_DURATION:
             self.click()
@@ -410,6 +421,7 @@ class Phrolova(BaseChar):
         return clicked
 
     def _axis_phase2_echo_queue_next(self):
+        # phase 2：释放 R 后等待实机观察到的窗口，让下一发强化 A 能接上。
         """Queue phase-2 A after the observed Q animation settle window."""
         if not self.echo_available():
             return False
@@ -420,6 +432,7 @@ class Phrolova(BaseChar):
         return clicked
 
     def _axis_phase2_enhanced(self):
+        # phase 2：发送一发强化 A；强化攻击结束后重置普通攻击计数到 A1。
         started_at = time.perf_counter()
         self.click()
         self.task.next_frame()
@@ -428,24 +441,26 @@ class Phrolova(BaseChar):
         return True
 
     def _axis_phase2_heavy(self):
+        # phase 2：使用 phase 2 专用短 Z 窗口，输入完成后交给切人衔接。
         return self._axis_heavy(self.AXIS_PHASE2_HEAVY_DURATION)
 
     def _do_axis_perform(self):
+        # 专属轴入口：按 phase 路由角色，并执行该 phase 的固定动作序列。
         self.last_liberation = -1
         phase = self._axis_sync_phase()
         if self._axis_route_to_actor(phase):
             return
         self._axis_start_phase()
-        if phase == 2:  # Startup: Phrolova aa q A e A z
+        if phase == 2:  # phase 2 启动：AA -> 声骸 -> 强化 A -> E -> 强化 A -> Z。
             actions = (
                 lambda: self._axis_normal(2), self._axis_phase2_echo_queue_next,
                 self._axis_phase2_enhanced, self._axis_resonance,
                 self._axis_phase2_enhanced, self._axis_phase2_heavy,
             )
-        elif phase == 4:  # Startup: Phrolova a dodge A r
+        elif phase == 4:  # phase 4 启动：A -> 闪 -> 强化 A -> 共鸣解放。
             actions = (self._axis_normal, self._axis_dodge_enhanced,
                        self._axis_liberation)
-        elif phase == 7:  # Startup: Phrolova a dodge A e A dodge 3a dodge A dodge 3a dodge A dodge 3a q A z r
+        elif phase == 7:  # phase 7 启动：首段强化连段 -> 3A 闪避链 -> 声骸 -> 强化 A -> Z -> 共鸣解放。
             actions = (
                 self._axis_normal, self._axis_dodge_enhanced,
                 self._axis_resonance, self._axis_enhanced_followup,
@@ -456,10 +471,10 @@ class Phrolova(BaseChar):
                 self._axis_echo, self._axis_phase7_enhanced,
                 self._axis_heavy, self._axis_phase7_liberation,
             )
-        elif phase == 12:  # Loop: Phrolova a dodge A e A
+        elif phase == 12:  # phase 12 循环：A -> 闪 -> 强化 A -> E -> 强化 A。
             actions = (self._axis_normal, self._axis_dodge_enhanced,
                        self._axis_resonance, self._axis_enhanced_followup)
-        elif phase == 14:  # Loop: Phrolova a dodge A 3a dodge A dodge 3a dodge A dodge 3a q A e A z r
+        elif phase == 14:  # phase 14 循环：强化连段 -> 3A 闪避链 -> 声骸 -> 强化 A -> E -> 强化 A -> Z -> 共鸣解放。
             actions = (
                 self._axis_normal, self._axis_dodge_enhanced,
                 self._axis_three_normal_dodge, self._axis_three_normal_dodge,
