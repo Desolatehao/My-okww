@@ -13,11 +13,11 @@
 - Z 输入保持窗口：`0.30 s`。
 - 已确认第二次强化 A 和 Z 均可释放后再切换卜灵。
 
-### phase 5：卜灵持续 A 后 Q
+### phase 5：卜灵 `aa` 后 Q
 
-- 持续 A 总窗口：`2.05 s`，对应视频 `18.750 -> 20.800`。
-- 窗口内平 A 输入间隔：`0.15 s`。
-- 已确认持续普攻完成后可正常释放 Q 并进入 phase 6。
+- 作者视频切入到 Q 为 `18.728 -> 20.728`；本次实测为 `21.940 -> 25.402`，且疑似多完成第三次 A。
+- A 总窗口调整为 `0.60 s`，窗口内输入间隔调整为 `0.30 s`。
+- 目标是变奏入场后稳定执行两次 A，再释放 Q 并进入 phase 6。
 
 ### phase 7：弗洛洛长连段
 
@@ -40,8 +40,8 @@ AXIS_PHASE7_Q_TO_A_CAST_TIME = 0.10
 AXIS_PHASE7_Z_TO_R_DELAY = 1.60
 
 # Douling.py
-AXIS_PHASE5_AA_DURATION = 2.05
-AXIS_PHASE5_AA_INTERVAL = 0.15
+AXIS_PHASE5_AA_DURATION = 0.60
+AXIS_PHASE5_AA_INTERVAL = 0.30
 ```
 
 ## 验证
