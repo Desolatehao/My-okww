@@ -29,6 +29,7 @@ class Douling(BaseChar):
     AXIS_PHASE3_HEAVY_POST_GAP = 0.35  # phase 3：第二次 Z 完成后到 R 的衔接等待。
     AXIS_PHASE9_HEAVY_DURATION = 0.75  # phase 9：两次 Z 各自的实机输入窗口。
     AXIS_PHASE9_HEAVY_GAP = 0.20  # phase 9：第一次 Z 完成后到第二次 Z 的间隔。
+    AXIS_PHASE11_AA_POST_SLEEP = 0.15  # phase 11：第二次 A 后等待卦象·艮登记，再释放 Q。
     AXIS_SEGMENT1_NORMAL_WINDOW = 1.20  # 非专属队伍 segment 1：第一段持续普攻窗口。
     AXIS_SEGMENT1_FOLLOWUP_NORMAL_WINDOW = 1.00  # 非专属队伍 segment 1：E 后第二段普攻窗口。
     # Video timing: startup AA begins around 00:00:00:598 and the switch
@@ -302,6 +303,11 @@ class Douling(BaseChar):
         self.sleep(self.AXIS_PHASE9_HEAVY_GAP, check_combat=False)
         return self._axis_heavy(self.AXIS_PHASE9_HEAVY_DURATION)
 
+    def _axis_phase11_normals(self):
+        self._axis_normal(2)
+        self.sleep(self.AXIS_PHASE11_AA_POST_SLEEP, check_combat=False)
+        return True
+
     def _axis_jump(self):
         started_at = time.perf_counter()
         self.task.jump(after_sleep=self.AXIS_JUMP_AFTER_SLEEP)
@@ -407,7 +413,7 @@ class Douling(BaseChar):
                 self._axis_phase9_heavy_followup,
             )
         elif phase == 11:  # phase 11 循环：AA -> 声骸 -> 共鸣解放。
-            actions = (lambda: self._axis_normal(2),
+            actions = (self._axis_phase11_normals,
                        self._axis_echo, self._axis_liberation)
         else:
             actions = ()
