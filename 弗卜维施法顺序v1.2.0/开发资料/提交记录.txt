@@ -1,0 +1,28 @@
+仓库：https://github.com/Desolatehao/My-okww
+导出时间：2026-09-10
+命令：git log --date=short --pretty='%h %ad %s'
+
+a1ac92a 2026-09-10 Keep only DPV axis work; drop vendored upstream OKWW
+6cdf23c 2026-09-10 Merge DPV axis 1.2.0
+8e884c4 2026-09-10 Release DPV axis 1.2.0
+f9ba20b 2026-09-10 Fix DPV phase 14 three-attack inputs
+fa557d0 2026-09-05 Update DPV 1.1.1 package
+2b3ed87 2026-09-05 Fix DPV phase 11 Buling symbol timing
+cd4bce3 2026-09-05 Release DPV axis 1.1.1
+5235268 2026-09-05 Update DPV phase timing progress
+9aa0106 2026-09-05 Package DPV axis as version 1.1.0
+0475049 2026-09-05 Skip Verina liberation in four-chain phases
+5b13204 2026-09-05 Record phase 5 and phase 7 timing updates
+2377510 2026-09-05 Tune phase 5 Buling attack window
+488b874 2026-09-05 Record phase 7 Z to R delay as 1.60s
+b4d35c3 2026-09-05 Document DPV axis character parameters in Chinese
+41e5258 2026-09-05 Update DPV axis timing through 1.0.8
+0d6583f 2026-09-04 Add DPV axis v1.0.6 timing snapshot
+3667514 2026-09-03 Add manually tested DPV axis package 1.0.5
+0005552 2026-09-03 Fix Buling Phrolova Verina axis handoffs
+5a7935c 2026-09-03 Add DPV rotation timing research and reference packages
+555358d 2026-09-03 Add private OKWW custom workspace and DPV axis
+
+---
+标签：dpv-axis-v1.0.6 (0d6583f)
+分支：master

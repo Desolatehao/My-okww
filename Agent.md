@@ -4,12 +4,12 @@
 
 ## 目录结构
 
-- `ok-wuthering-waves-custom/axis_douling_phrolova_verina/` —— 弗卜维（卜灵 / 弗洛洛 / 维里奈）轴的按版本交付包。
-  每个版本一个文件夹，内含 `Douling.py`、`Phrolova.py`、`Verina.py`、`team.json`、`TIMING.md`、
-  `MANUAL_TIMELINE_24FPS.md`、`PROGRESS_<版本>.md` 和 `角色资料/`；同名 zip 是可导入 OKWW 的成品包。
-  **1.2.0 是当前权威版本。**
-- `ok-wuthering-waves-custom/弗卜维_施法时序_1.0.7.zip`、`..._1.0.8.zip`、`..._1.1.0.zip` ——
-  早期打包时落在 checkout 根目录的成品包。axis 目录里没有 1.0.7 / 1.0.8 的 zip，1.1.0 的 zip 与 axis 目录内的不是同一份。
+- `弗卜维施法顺序v1.2.0/` —— **当前权威版本**（卜灵 / 弗洛洛 / 维里奈固定轴）。内含
+  `Douling.py`、`Phrolova.py`、`Verina.py`、`team.json`、`TIMING.md`、`MANUAL_TIMELINE_24FPS.md`、
+  `PROGRESS_1.2.0.md`、`角色资料/`，以及 `开发资料/`（开发过程汇总 + 提交记录）。
+- `弗卜维施法顺序v1.2.0.zip` —— 与之对应的可导入 OKWW 的成品包，内容与文件夹一致（仅换行符为 CRLF）。
+- `ok-wuthering-waves-custom/axis_douling_phrolova_verina/` —— 历史版本归档，只保留 1.0.6 – 1.1.1 的文件夹，
+  仅供查阅，不要拿来测试当前轴；早期版本的压缩包已删除。
 - `ok-wuthering-waves-custom/src/char/Douling.py`、`Phrolova.py`、`Verina.py` 和 `config.py` ——
   最初导入时的“可运行 checkout”改动快照，停在 1.0.x。之后所有调整只写在 axis 目录，这里没有同步过，
   不要把它当作当前版本。
