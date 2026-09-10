@@ -2,9 +2,9 @@
 
 ## 证据来源
 
-- 弗洛洛：`/Users/desolatehao/Project/My-okww/参考资料/Cantarella_Mornye_Phrolova_楽山_1.0.0/Phrolova.py`，使用其中的帧表派生点、强化重击解锁大招帧和大招隐藏 HUD 时长。
-- 维里奈：`/Users/desolatehao/Project/My-okww/参考资料/Hiyuki_Lucilla_Verina_a38999_1.0.0.zip` 内的 `Verina.py`，使用 `ATTACK_INTERVAL = 0.1`；E/Q 的结束边界仍由 OKWW HUD 状态确认。
-- 卜灵：`/Users/desolatehao/Project/My-okww/参考资料/Augusta_Baizhi_Buling_4_1.0.0.zip` 内的 `Douling.py`。
+- 弗洛洛：`/Users/desolatehao/Project/My-okww/参考资料/弗卜维涉及资料/Cantarella_Mornye_Phrolova_楽山_1.0.0/Phrolova.py`，使用其中的帧表派生点、强化重击解锁大招帧和大招隐藏 HUD 时长。
+- 维里奈：`/Users/desolatehao/Project/My-okww/参考资料/弗卜维涉及资料/Hiyuki_Lucilla_Verina_a38999_1.0.0.zip` 内的 `Verina.py`，使用 `ATTACK_INTERVAL = 0.1`；E/Q 的结束边界仍由 OKWW HUD 状态确认。
+- 卜灵：`/Users/desolatehao/Project/My-okww/参考资料/弗卜维涉及资料/Augusta_Baizhi_Buling_4_1.0.0.zip` 内的 `Douling.py`。
   该文件提供的是角色轮转实现和固定等待值，不是逐招视频帧表；因此下面明确区分“参考实现等待/输入间隔”和“视频帧实测”。
 
 ## 施法时间
