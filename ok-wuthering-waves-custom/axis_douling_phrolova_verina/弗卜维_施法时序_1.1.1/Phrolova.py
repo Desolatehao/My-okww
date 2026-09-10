@@ -30,9 +30,9 @@ class Phrolova(BaseChar):
     AXIS_PHASE2_ENHANCED_CAST_TIME = 0.55  # phase 2：两发强化 A 之间的动作窗口。
     AXIS_PHASE2_HEAVY_DURATION = 0.3  # phase 2：Z 输入保持时间，之后立即切人。
     # Phase 7 video: one 3A segment lasts about 1.26s. During that window,
-    # send a normal-A input every 0.15s; only the total duration is tuned.
+    # send a normal-A input every 0.10s; only the total duration is tuned.
     AXIS_PHASE7_THREE_A_DURATION = 1.70  # phase 7/14：一段 3A 连续输入的总窗口。
-    AXIS_PHASE7_THREE_A_INTERVAL = 0.10  # phase 7：3A 窗口内每次普通 A 的输入间隔。
+    AXIS_PHASE7_THREE_A_INTERVAL = 0.10  # phase 7/14：3A 窗口内每次普通 A 的输入间隔。
     AXIS_PHASE7_ECHO_POST_SLEEP = 1.00  # phase 7：Q 动画结束后的强化 A 衔接等待。
     AXIS_PHASE7_Q_TO_A_CAST_TIME = 0.10  # phase 7/14：声骸后接强化 A 的短等待。
     AXIS_PHASE7_Z_TO_R_DELAY = 1.75  # phase 7/14：Z 完成后到共鸣解放的实机衔接等待。
@@ -482,10 +482,11 @@ class Phrolova(BaseChar):
         elif phase == 14:  # phase 14 循环：强化连段 -> 3A 闪避链 -> 声骸 -> 强化 A -> E -> 强化 A -> Z -> 共鸣解放。
             actions = (
                 self._axis_normal, self._axis_dodge_enhanced,
-                self._axis_three_normal_dodge, self._axis_three_normal_dodge,
-                 lambda: self._axis_normal(3), self._axis_echo,
-                self._axis_enhanced, self._axis_resonance,
-                 self._axis_enhanced, self._axis_heavy, self._axis_liberation,
+                self._axis_phase7_three_normal_dodge, self._axis_phase7_three_normal_dodge,
+                self._axis_phase7_three_normal,
+                lambda: self._axis_echo(self.AXIS_PHASE7_ECHO_POST_SLEEP),
+                self._axis_phase7_enhanced, self._axis_resonance,
+                 self._axis_enhanced, self._axis_heavy, self._axis_phase7_liberation,
             )
         else:
             actions = ()
