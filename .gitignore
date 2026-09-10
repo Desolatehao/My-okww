@@ -1,9 +1,12 @@
 # Local workspace metadata and generated runtime artifacts.
+.DS_Store
+**/.DS_Store
 .codex/
 .vscode/
 __pycache__/
 *.py[cod]
 
-# The upstream checkout keeps its own Git metadata. It is intentionally
-# preserved locally and represented by the parent repository as a gitlink.
-ok-wuthering-waves/.git/
+# Upstream OKWW checkouts are third-party code and stay out of this repository.
+# Clone them next to this repo when you need to diff or run the axis code.
+ok-wuthering-waves/
+ok-wuthering-waves-custom/ok-wuthering-waves/
