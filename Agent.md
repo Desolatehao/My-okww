@@ -13,9 +13,18 @@
 - `ok-wuthering-waves-custom/src/char/Douling.py`、`Phrolova.py`、`Verina.py` 和 `config.py` ——
   最初导入时的“可运行 checkout”改动快照，停在 1.0.x。之后所有调整只写在 axis 目录，这里没有同步过，
   不要把它当作当前版本。
-- `Augusta_Baizhi_Buling_4_1.0.0/` 及同名 zip、`Cantarella_Mornye_Phrolova_楽山_1.0.0/`、
-  `Hiyuki_Lucilla_Verina_a38999_1.0.0.zip` —— 其他配队的角色文件与成品包。
-- `弗坎洛轮椅-*.wwcombo.json` —— 连招轴导出文件。
+
+## 参考资料（不要删）
+
+根目录这几个是本轴开发时读的原始资料，不是交付物，删掉就没有对照依据了。
+详细说明见 `弗卜维施法顺序v1.2.0/开发资料/参考资料清单.md`。
+
+- `Augusta_Baizhi_Buling_4_1.0.0/` 及同名 zip —— 卜灵参数来源（实现层等待值，非逐帧数据）。
+- `Cantarella_Mornye_Phrolova_楽山_1.0.0/` —— 弗洛洛参数来源（作者 楽山，含完整帧表）。
+- `Hiyuki_Lucilla_Verina_a38999_1.0.0.zip` —— 维里奈参数来源（`ATTACK_INTERVAL = 0.1`）。
+- `弗坎洛轮椅-*.wwcombo.json` —— wwcombo-chart 连招图，动作编排参照。
+
+`TIMING.md` 的「证据来源」一节直接引用上面这些路径；如果移动它们，那份文档要同步更新。
 
 ## 上游代码
 
