@@ -19,7 +19,7 @@ For the customized checkout, the direct source-file method is the simplest:
 3. Restart OKWW so the imported character classes and team-code cache are refreshed.
 4. Start Auto Combat with exactly Buling, Phrolova, and Verina in the detected team.
 
-The Qt Character Code tab is the alternative for keeping the change team-scoped. Create or import a custom team containing exactly these three characters, then replace and save the corresponding `Douling.py`, `Phrolova.py`, and `Verina.py` entries. This independent snapshot is version `1.0.8`; use the files in this folder together with `MANUAL_TIMELINE_24FPS.md` and `PROGRESS_1.0.8.md` for the current test baseline. The older archives are preserved as historical artifacts and must not be used for current testing.
+The Qt Character Code tab is the alternative for keeping the change team-scoped. Create or import a custom team containing exactly these three characters, then replace and save the corresponding `Douling.py`, `Phrolova.py`, and `Verina.py` entries. This independent snapshot is version `1.1.0`; use the files in this folder together with `MANUAL_TIMELINE_24FPS.md` and `PROGRESS_1.1.0.md` for the current test baseline. The older archives are preserved as historical artifacts and must not be used for current testing.
 
 Do not combine the three classes into one Python file, rename the classes, or replace `BaseChar.py`. The axis gate depends on the canonical names `char_douling`, `char_phrolova`, and `char_verina`.
 
@@ -178,7 +178,7 @@ The current snapshot was manually verified in OKWW with the exact Buling/Phrolov
 - Character-code comments should be written in Chinese and identify the phase, unit, and meaning of each phase-specific parameter.
 - Comment-only documentation updates must preserve executable tokens, parameter values, action order, and state-machine behavior.
 
-## Version 1.0.8 Documentation Update
+## Version 1.1.0 Snapshot Update
 
 - `Douling.py`, `Phrolova.py`, and `Verina.py` now include Chinese comments for the axis parameters, phase routes, shared state fields, and action helpers.
 - The comments distinguish `q`/`r` key notation from the functional names 声骸 and 共鸣解放; key bindings remain controlled by OKWW configuration.

@@ -27,6 +27,8 @@ class Douling(BaseChar):
     AXIS_PHASE3_HEAVY_DURATION = 0.75  # phase 3：每次 Z 的实机验证长按时长。
     AXIS_PHASE3_HEAVY_GAP = 0.20  # phase 3：第一次 Z 完成后到第二次 Z 的间隔。
     AXIS_PHASE3_HEAVY_POST_GAP = 0.35  # phase 3：第二次 Z 完成后到 R 的衔接等待。
+    AXIS_PHASE9_HEAVY_DURATION = 0.75  # phase 9：两次 Z 各自的实机输入窗口。
+    AXIS_PHASE9_HEAVY_GAP = 0.20  # phase 9：第一次 Z 完成后到第二次 Z 的间隔。
     AXIS_SEGMENT1_NORMAL_WINDOW = 1.20  # 非专属队伍 segment 1：第一段持续普攻窗口。
     AXIS_SEGMENT1_FOLLOWUP_NORMAL_WINDOW = 1.00  # 非专属队伍 segment 1：E 后第二段普攻窗口。
     # Video timing: startup AA begins around 00:00:00:598 and the switch
@@ -38,6 +40,7 @@ class Douling(BaseChar):
     # keep only two accepted A opportunities before sending the echo.
     AXIS_PHASE5_AA_DURATION = 0.70  # phase 5：变奏衔接后的 A 总窗口，结束后释放声骸。
     AXIS_PHASE5_AA_INTERVAL = 0.15  # phase 5：两次 A 输入之间的间隔，保持实战确认的输入节奏。
+    AXIS_PHASE5_ECHO_DOWN_TIME = 0.05  # phase 5：声骸按键保持时长。
     AXIS_SWITCH_LOCK = 8.0  # 非专属队伍：角色出场后保持普通切人优先级的时间。
     AXIS_DODGE_PRE_SLEEP = 0.14  # 预留给闪避输入前的状态稳定时间。
     AXIS_DODGE_POST_SLEEP = 0.12  # 闪避输入后的最短衔接等待。
@@ -294,6 +297,11 @@ class Douling(BaseChar):
             self.sleep(self.AXIS_PHASE3_HEAVY_POST_GAP, check_combat=False)
         return completed
 
+    def _axis_phase9_heavy_followup(self):
+        """Resolve phase-9's second heavy before handing off to Verina."""
+        self.sleep(self.AXIS_PHASE9_HEAVY_GAP, check_combat=False)
+        return self._axis_heavy(self.AXIS_PHASE9_HEAVY_DURATION)
+
     def _axis_jump(self):
         started_at = time.perf_counter()
         self.task.jump(after_sleep=self.AXIS_JUMP_AFTER_SLEEP)
@@ -325,6 +333,16 @@ class Douling(BaseChar):
             self._axis_wait_cast(started_at, self.AXIS_ECHO_CAST_TIME)
             self.sleep(self.AXIS_ECHO_POST_SLEEP, check_combat=False)
         return clicked
+
+    def _axis_phase5_echo(self):
+        """Send phase-5 echo with the axis-specific key hold time."""
+        if not self.echo_available():
+            return False
+        self.send_echo_key(down_time=self.AXIS_PHASE5_ECHO_DOWN_TIME)
+        self.record_echo_use()
+        self.task.next_frame()
+        self.sleep(self.AXIS_ECHO_POST_SLEEP, check_combat=False)
+        return True
 
     def _axis_resonance(self):
         if not self.resonance_available():
@@ -374,18 +392,20 @@ class Douling(BaseChar):
                 self._axis_liberation,
             )
         elif phase == 5:  # phase 5 启动：持续 A -> 声骸。
-            actions = (self._axis_phase5_aa_window, self._axis_echo)
-        elif phase == 9:  # phase 9 循环：E -> A -> 跳 -> 空中 2A -> Z -> 4A -> Z。
-            actions = (self._axis_resonance, self._axis_normal,
-                       self._axis_jump,
-                       lambda: self._axis_normal(
-                           count=2,
-                           interval=self.AXIS_AERIAL_NORMAL_INTERVAL,
-                           cast_time=self.AXIS_AERIAL_NORMAL_CAST_TIME,
-                       ),
-                       self._axis_heavy,
-                       lambda: self._axis_normal(count=4),
-                       self._axis_heavy)
+            actions = (self._axis_phase5_aa_window, self._axis_phase5_echo)
+        elif phase == 9:  # phase 9 循环：复用 phase 3 的 E -> 4A -> 跳 -> 空中 A -> Z -> Z，不释放 R。
+            actions = (
+                self._axis_resonance,
+                lambda: self._axis_normal(count=4, interval=0.20),
+                self._axis_jump,
+                lambda: self._axis_normal(
+                    count=1,
+                    interval=self.AXIS_AERIAL_NORMAL_INTERVAL,
+                    cast_time=self.AXIS_AERIAL_NORMAL_CAST_TIME,
+                ),
+                lambda: self._axis_heavy(self.AXIS_PHASE9_HEAVY_DURATION),
+                self._axis_phase9_heavy_followup,
+            )
         elif phase == 11:  # phase 11 循环：AA -> 声骸 -> 共鸣解放。
             actions = (lambda: self._axis_normal(2),
                        self._axis_echo, self._axis_liberation)

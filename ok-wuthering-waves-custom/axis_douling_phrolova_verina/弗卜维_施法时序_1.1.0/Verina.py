@@ -26,6 +26,7 @@ class Verina(BaseChar):
     AXIS_JUMP_POST_SLEEP = 0.14  # phase 6、13：跳跃后到下一动作的等待。
     AXIS_SKILL_POST_SLEEP = 0.22  # phase 1、6、10：E 后的显式尾部缓冲。
     AXIS_ECHO_POST_SLEEP = 0.16  # phase 6、10、13：声骸后的脱手尾部缓冲。
+    AXIS_PHASE8_SWITCH_DELAY = 1.00  # phase 8：切入维里奈后等待切换 CD，再转入卜灵。
     # Video timing for phase 6: after the jump, keep Verina on field long
     # enough for both final A inputs to enter their actions before hand-off.
     AXIS_PHASE6_AA_WINDOW = 0.80  # phase 6：跳跃后 AA 的总留场窗口。
@@ -300,6 +301,15 @@ class Verina(BaseChar):
             self.sleep(self.AXIS_ECHO_POST_SLEEP, check_combat=False)
         return clicked
 
+    def _axis_phase8_wait(self):
+        """Send phase-8 A inside the one-second post-switch window."""
+        started_at = time.perf_counter()
+        self._axis_normal()
+        remaining = self.AXIS_PHASE8_SWITCH_DELAY - (time.perf_counter() - started_at)
+        if remaining > 0:
+            self.sleep(remaining, check_combat=False)
+        return True
+
     def _do_axis_perform(self):
         # 专属轴入口：按照 phase 表执行维里奈的 E/Q、跳跃和普攻动作。
         phase = self._axis_sync_phase()
@@ -308,12 +318,12 @@ class Verina(BaseChar):
         self._axis_start_phase()
         if phase == 1:  # phase 1 启动：E。
             actions = (self._axis_resonance,)
-        elif phase == 6:  # phase 6 启动：E -> 声骸 -> 闪 -> 跳 -> AA；四链不释放 R。
+        elif phase == 6:  # phase 6 启动：E -> 声骸 -> 闪 -> R -> 跳 -> AA。
             actions = (self._axis_resonance, self._axis_echo,
-                       self._axis_dodge, self._axis_jump,
+                       self._axis_dodge, self._axis_liberation, self._axis_jump,
                        self._axis_phase6_two_normal)
-        elif phase == 8:  # phase 8 循环入口：维里奈不攻击，直接切卜灵。
-            actions = ()
+        elif phase == 8:  # phase 8 循环入口：维里奈 A 后等待，再切卜灵。
+            actions = (self._axis_phase8_wait,)
         elif phase == 10:  # phase 10 循环：E -> 声骸。
             actions = (self._axis_resonance, self._axis_echo)
         elif phase == 13:  # phase 13 循环：四链不释放 R，直接跳 -> AA。
