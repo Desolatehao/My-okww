@@ -8,6 +8,13 @@ This folder is a reviewed snapshot of the targeted three-character rotation for 
 - Phrolova (`char_phrolova`, displayed as Phrolova/弗洛洛)
 - Verina (`char_verina`, displayed as Verina/维里奈)
 
+## Character Requirements
+
+- Phrolova: `2+1` configuration, meaning S2/C2 plus her signature weapon.
+- Verina: C2 changes only whether the loop needs to cast R. With C2, the loop may skip R; with C0, the same rotation can be reproduced by keeping R in the loop.
+- Douling and Verina: only first-rank Fantasy Variation is required.
+- These are the tested/target configuration notes for the axis. The scripts do not automatically verify chains, weapons, or Fantasy Variation rank.
+
 The files in this folder are not loaded automatically by OKWW. They are a deliverable snapshot. The runnable customized checkout is the sibling folder `ok-wuthering-waves-custom`; the original `ok-wuthering-waves` checkout is kept unchanged. To run the axis in the customized checkout, the three files are already present in `src/char/`.
 
 ## Deployment
