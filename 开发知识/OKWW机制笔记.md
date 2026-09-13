@@ -226,7 +226,11 @@ else:
 - `f_break()` / `task.check_f_break()`；`check_f_on_switch` 控制切走前是否自动按 F
   （治疗者默认关闭）。
 - ⚠️ 上游注释明确写着：**击破动画带全局时停且目前无法识别，可能出现计时问题**。
-  弗卜维轴因此暂不加入 F 键机制。
+- 弗卜维轴 1.2.0 起按作者录像在 phase 7 / phase 14 的固定位置打处决，但**不复用**
+  `task.check_f_break()`：它的 `can_break` 是粘的（只有框架自己的 `f_break()` 会清），
+  自己发 F 时清不掉。改为直读 `f_break_full` 模板（阈值 `0.92`），
+  用 `in_team()` 掉下去判演出开始、队伍 HUD 稳定回来判演出结束，
+  并在 `_do_axis_perform` 里把 `check_f_on_switch` 置 False，避免框架切人时另插一发。
 
 ---
 

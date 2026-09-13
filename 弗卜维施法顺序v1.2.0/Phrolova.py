@@ -56,6 +56,21 @@ class Phrolova(BaseChar):
     # (about 1.33s).  The previous 2.32s frame-data value delayed R too much.
     AXIS_HEAVY_DURATION = 1.33  # phase 7/14：强化重击 Z 的默认动作窗口。
 
+    # 处决（F）位置来自作者录像复核：phase 7 插在 `a 闪 A e A` 之后、
+    # phase 14 插在 `a 闪 A` 之后；循环第一轮不打，第二、三轮才打。
+    # 提示检测直读 f_break_full 模板，不复用 task.check_f_break()，
+    # 因为它的 can_break 标志是粘的、只有框架自己的 f_break() 会清。
+    AXIS_F_BREAK_ENABLED = True  # 总开关：False 时轴内一个 F 都不发。
+    AXIS_F_BREAK_FROM_ROUND = 1  # 循环轮门槛：1 = 从第二轮开始打（作者录像）。
+    AXIS_F_BREAK_THRESHOLD = 0.92  # 处决提示模板阈值，与框架 check_f_break 一致。
+    AXIS_F_BREAK_PROBE = 0.35  # 探处决提示的窗口；探不到就直接走下一格。
+    AXIS_F_BREAK_PROBE_INTERVAL = 0.08  # 探测时的读屏间隔。
+    AXIS_F_BREAK_BURST = 0.60  # 连发 F、等处决演出开始的上限。
+    AXIS_F_BREAK_INTERVAL = 0.15  # 连发 F 的间隔，演出里的按键会被丢掉。
+    AXIS_F_BREAK_ANIM_TIMEOUT = 5.0  # 处决演出的等待上限。
+    AXIS_F_BREAK_HUD_SETTLE = 0.35  # 队伍 HUD 连续回来这么久算演出结束。
+    AXIS_F_BREAK_HUD_INTERVAL = 0.02  # 等演出时的读帧间隔。
+
     # 专属轴的精确队伍门槛和 phase 执行角色映射。
     _AXIS_TEAM = {'char_douling', 'char_phrolova', 'char_verina'}
     _AXIS_PHASE_ACTOR = {
@@ -117,12 +132,14 @@ class Phrolova(BaseChar):
                 'step': 0,
                 'phase_started': False,
                 'step_wait_started': None,
+                'cycle_round': 0,
             }
             self.task._dpv_axis_state = state
         else:
             state.setdefault('step', 0)
             state.setdefault('phase_started', False)
             state.setdefault('step_wait_started', None)
+            state.setdefault('cycle_round', 0)
         return state
 
     def _axis_sync_phase(self):
@@ -200,6 +217,9 @@ class Phrolova(BaseChar):
     def _axis_advance(self, phase):
         next_phase, target, free_intro = self._AXIS_NEXT[phase]
         state = self._axis_state()
+        if phase == 14:
+            # 跑完一轮循环记一次；phase 14 的处决靠它区分第一轮和后续轮。
+            state['cycle_round'] = state.get('cycle_round', 0) + 1
         state['phase'] = next_phase
         state['target'] = target
         state['step'] = 0
@@ -354,6 +374,80 @@ class Phrolova(BaseChar):
         self._axis_wait_cast(started_at, self.AXIS_LIBERATION_CAST_TIME)
         return True
 
+    def _axis_f_break_prompt(self):
+        """读一帧处决提示模板；读不到就当没有提示。"""
+        try:
+            return bool(self.task.find_one('f_break_full',
+                                           threshold=self.AXIS_F_BREAK_THRESHOLD))
+        except Exception:
+            # 读屏失败按"没有提示"处理：顶多退回没有处决的那套流程。
+            return False
+
+    def _axis_wait_f_break_end(self):
+        """等处决演出结束：队伍 HUD 消失期间不跑战斗检查。"""
+        started_at = time.perf_counter()
+        back_since = None
+        while time.perf_counter() - started_at < self.AXIS_F_BREAK_ANIM_TIMEOUT:
+            self.task.next_frame()
+            if not self.task.in_team()[0]:
+                back_since = None
+            elif back_since is None:
+                back_since = time.perf_counter()
+            elif time.perf_counter() - back_since >= self.AXIS_F_BREAK_HUD_SETTLE:
+                self.logger.info(
+                    f'dpv axis f_break done {time.perf_counter() - started_at:.2f}s')
+                return True
+            self.sleep(self.AXIS_F_BREAK_HUD_INTERVAL, check_combat=False)
+        self.logger.warning('dpv axis f_break animation wait timed out')
+        return True
+
+    def _axis_f_break(self):
+        """在 phase 表指定的位置打处决。
+
+        先短窗口探提示：没有提示就直接进下一格，不占动作窗口。探到提示才连发 F，
+        并等演出演完、队伍 HUD 稳定回来再继续；处决演出带全局时停，不等会把
+        后面每一格的时长整体推歪。
+        """
+        if not self.AXIS_F_BREAK_ENABLED:
+            return True
+        seen = self._axis_f_break_prompt()
+        deadline = time.perf_counter() + self.AXIS_F_BREAK_PROBE
+        while not seen and time.perf_counter() < deadline:
+            self.task.next_frame()
+            self.sleep(self.AXIS_F_BREAK_PROBE_INTERVAL, check_combat=False)
+            seen = self._axis_f_break_prompt()
+        if not seen:
+            self.logger.info('dpv axis f_break skipped: no execution prompt')
+            return True
+        started_at = time.perf_counter()
+        broke = False
+        while time.perf_counter() - started_at < self.AXIS_F_BREAK_BURST:
+            self.task.send_key('f', after_sleep=0)
+            # 自己发 F，框架的 can_break 不会被 f_break() 清，这里手动复位。
+            self.task.can_break = False
+            self.task.next_frame()
+            if not self.task.in_team()[0]:
+                broke = True
+                break
+            self.sleep(self.AXIS_F_BREAK_INTERVAL, check_combat=False)
+        if not broke:
+            self.logger.warning('dpv axis f_break: prompt seen but no execution started')
+            return True
+        self._axis_wait_f_break_end()
+        # 处决动画结束后普通攻击链从头开始。
+        self._axis_attack_index = 0
+        return True
+
+    def _axis_cycle_f_break(self):
+        """phase 14 的处决：作者录像里第一轮循环不打，从第二轮开始打。"""
+        if not self.AXIS_F_BREAK_ENABLED:
+            return True
+        state = self._axis_state()
+        if state.get('cycle_round', 0) < self.AXIS_F_BREAK_FROM_ROUND:
+            self.logger.info('dpv axis f_break skipped: first loop round')
+            return True
+        return self._axis_f_break()
+
     def _axis_dodge(self):
         self.sleep(self.AXIS_DODGE_PRE_SLEEP)
         self.task.next_frame()
@@ -452,6 +546,8 @@ class Phrolova(BaseChar):
     def _do_axis_perform(self):
         # 专属轴入口：按 phase 路由角色，并执行该 phase 的固定动作序列。
         self.last_liberation = -1
+        # 处决位置由 phase 表决定，关掉框架切人时的自动 F，免得插一发。
+        self.check_f_on_switch = False
         phase = self._axis_sync_phase()
         if self._axis_route_to_actor(phase):
             return
@@ -465,10 +561,11 @@ class Phrolova(BaseChar):
         elif phase == 4:  # phase 4 启动：A -> 闪 -> 强化 A -> 共鸣解放。
             actions = (self._axis_normal, self._axis_dodge_enhanced,
                        self._axis_liberation)
-        elif phase == 7:  # phase 7 启动：首段强化连段 -> 3A 闪避链 -> 声骸 -> 强化 A -> Z -> 共鸣解放。
+        elif phase == 7:  # phase 7 启动：A 闪 A -> E A -> 处决 F -> 3A 闪避链 -> 声骸 -> 强化 A -> Z -> R。
             actions = (
                 self._axis_normal, self._axis_dodge_enhanced,
                 self._axis_resonance, self._axis_enhanced_followup,
+                self._axis_f_break,
                 self._axis_dodge,
                 self._axis_phase7_three_normal_dodge, self._axis_phase7_three_normal_dodge,
                 self._axis_phase7_three_normal_dodge,
@@ -479,9 +576,10 @@ class Phrolova(BaseChar):
         elif phase == 12:  # phase 12 循环：A -> 闪 -> 强化 A -> E -> 强化 A。
             actions = (self._axis_normal, self._axis_dodge_enhanced,
                        self._axis_resonance, self._axis_enhanced_followup)
-        elif phase == 14:  # phase 14 循环：强化连段 -> 3A 闪避链 -> 声骸 -> 强化 A -> E -> 强化 A -> Z -> 共鸣解放。
+        elif phase == 14:  # phase 14 循环：A 闪 A -> 处决 F（第二轮起）-> 3A 闪避链 -> 声骸 -> 强化 A -> E -> 强化 A -> Z -> R。
             actions = (
                 self._axis_normal, self._axis_dodge_enhanced,
+                self._axis_cycle_f_break,
                 self._axis_phase7_three_normal_dodge, self._axis_phase7_three_normal_dodge,
                 self._axis_phase7_three_normal,
                 lambda: self._axis_echo(self.AXIS_PHASE7_ECHO_POST_SLEEP),

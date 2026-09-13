@@ -49,6 +49,38 @@
 - 修正 phase14 尾段衔接：Q 后等待从全局 `2.00 s` 改为 phase7 同值 `1.00 s`，Q 后第一发强化 A 从通用 `1.33 s` 改为 phase7 短窗口 `0.10 s`，随后保持 `E -> 强化 A -> Z -> R`。
 - phase14 末尾 Z -> R 改为复用 phase7 专用 helper，沿用 `1.75 s` 的 Z 后等待后再发 R。
 
+## 处决 F 接入（2026-09-13 修改，待实机复测）
+
+### 来源
+
+作者录像复核：启动轴 `弗 a 闪 A e A` 之后插了一次处决 F，然后才 `闪 3a ...`；
+循环轴第一轮没有处决（旧 Boss 已被打死、新 Boss 还没削韧），
+第二、三轮都在 `弗 a 闪 A` 之后插处决 F，再继续 `3a 闪 ...`。
+
+### 改动
+
+- phase 7：在 `_axis_enhanced_followup`（`e A` 那一格）之后、`闪` 之前插入 `_axis_f_break`。
+- phase 14：在 `_axis_dodge_enhanced`（`a 闪 A` 那一格）之后插入 `_axis_cycle_f_break`；
+  共享状态新增 `cycle_round`，每跑完一轮循环 +1，`AXIS_F_BREAK_FROM_ROUND = 1` 时第一轮跳过、第二轮起才打。
+- 两个位置都先探提示再按键：探到才连发 F，探不到就直接进下一格，不占动作窗口。
+- `_do_axis_perform` 里把 `check_f_on_switch` 置 False，避免框架在切人时另外插一发自动 F。
+
+### 判据与等待
+
+- 提示判据直读 `f_break_full` 模板，阈值 `0.92`（与框架 `check_f_break` 一致）。
+  不复用 `task.check_f_break()`：它的 `can_break` 是粘的，只有框架自己的 `f_break()` 会清，
+  自己发 F 时清不掉，拿它当判据会一直读到"有提示"。
+- 探测窗口 `0.35 s`（间隔 `0.08 s`）；探到后连发 F 的上限 `0.60 s`（间隔 `0.15 s`）。
+- 用 `in_team()` 掉下去判断处决演出已经开始，随后等队伍 HUD 连续回来 `0.35 s` 才算演完
+  （上限 `5.0 s`）。处决演出带全局时停，不等会把后面每一格的时长整体推歪。
+- 整个等待过程一律 `check_combat=False`，避免 HUD 消失被判成脱战。
+
+### 待复测
+
+- 处决演出时长随怪物/角色不同（参考包实测 0.5–5 s），`AXIS_F_BREAK_ANIM_TIMEOUT = 5.0` 是否够。
+- 第二轮门槛是否与实机一致：本改动按录像做成"第一轮不打"，如果实机第一轮就有提示，可以改判据。
+- 处决后接 `闪 3a ...` 的衔接时序（处决结束时攻击链已重置，代码把 `_axis_attack_index` 归零）。
+
 ## 当前关键参数
 
 ```python
@@ -78,10 +110,23 @@ AXIS_PHASE9_AERIAL_READY_TIMEOUT = 0.50
 AXIS_PHASE5_AA_DURATION = 0.70
 AXIS_PHASE5_AA_INTERVAL = 0.15
 AXIS_PHASE5_ECHO_DOWN_TIME = 0.05
+
+# Phrolova.py（处决 F，1.2.0 新增，待实机复测）
+AXIS_F_BREAK_ENABLED = True
+AXIS_F_BREAK_FROM_ROUND = 1      # 1 = 循环第一轮不打，第二轮起打
+AXIS_F_BREAK_THRESHOLD = 0.92
+AXIS_F_BREAK_PROBE = 0.35
+AXIS_F_BREAK_PROBE_INTERVAL = 0.08
+AXIS_F_BREAK_BURST = 0.60
+AXIS_F_BREAK_INTERVAL = 0.15
+AXIS_F_BREAK_ANIM_TIMEOUT = 5.0
+AXIS_F_BREAK_HUD_SETTLE = 0.35
 ```
 
 ## 验证
 
 - 三个角色脚本执行 Python 语法检查。
+- 处决 F 分支用桩任务跑过四种场景：无提示（不按键）、提示后触发（等演出结束）、
+  提示但未触发（走满 `0.60 s` 上限后继续）、循环第一轮（跳过探测）。
 - 版本 ZIP 排除 `__pycache__`。
 - 通用 `src/char` 未修改。
